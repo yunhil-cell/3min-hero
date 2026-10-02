@@ -1,0 +1,433 @@
+@charset "UTF-8";
+
+/* 1. 둥근모꼴 웹폰트 정의 */
+@font-face {
+  font-family: 'NeoDunggeunGothicPro';
+  src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_2302@1.0/NeoDunggeunmoPro-Regular.woff2') format('woff2');
+  font-weight: normal;
+  font-display: swap;
+}
+
+/* 2. 공통 초기화 및 폰트 강제 적용 */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  user-select: none;
+  font-family: 'NeoDunggeunGothicPro', sans-serif !important;
+}
+
+body {
+  background-color: #0b0c10;
+  color: #fff;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* 3. 캔버스 컨테이너 (900 x 500) */
+#game-container {
+  position: relative;
+  width: 900px;
+  height: 500px;
+  background: #000;
+  border: 3px solid #333;
+  box-shadow: 0 0 30px rgba(0, 0, 0, 0.95);
+  overflow: hidden;
+}
+
+/* 픽셀 도트 선명도 보존 (흐림 방지) */
+canvas#gameCanvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+/* 4. 오버레이 & 모달 공통 레이아웃 */
+.overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background: rgba(10, 10, 15, 0.88);
+  z-index: 20;
+}
+
+.pixel-text {
+  text-shadow: 2px 2px 0 #000;
+}
+
+h1.arcade-title {
+  font-size: 52px;
+  color: #ffcc00;
+  text-shadow: 3px 3px 0 #b38600, 0 0 15px rgba(255, 204, 0, 0.5);
+  margin-bottom: 12px;
+  letter-spacing: 2px;
+}
+
+h2 {
+  font-size: 26px;
+  margin-bottom: 16px;
+  color: #fff;
+}
+
+/* 점멸 텍스트 */
+.blink-text {
+  font-size: 18px;
+  color: #00e5ff;
+  margin-bottom: 24px;
+  animation: blinkAnim 1s infinite steps(1);
+}
+
+@keyframes blinkAnim {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+/* 5. 버튼 공통 스타일 */
+.menu-btn-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.btn {
+  width: 220px;
+  padding: 12px 0;
+  font-size: 18px;
+  color: #fff;
+  background: #222530;
+  border: 2px solid #555d75;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: 0.15s;
+}
+
+.btn:hover {
+  background: #ffcc00;
+  color: #000;
+  border-color: #fff;
+  box-shadow: 0 0 10px #ffcc00;
+}
+
+.btn:disabled {
+  background: #181920;
+  border-color: #333;
+  color: #555;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.btn-primary {
+  background: #ffaa00;
+  color: #000;
+  border-color: #fff;
+  font-weight: bold;
+}
+
+.btn-small {
+  width: 70px;
+  padding: 8px 0;
+  font-size: 16px;
+}
+
+/* 6. 선택 화면 스타일 */
+.select-label {
+  font-size: 14px;
+  color: #8892b0;
+  margin-bottom: 6px;
+}
+
+.select-group {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.choice-btn {
+  padding: 10px 16px;
+  background: #1c1e29;
+  border: 2px solid #3d4257;
+  color: #ccd6f6;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 16px;
+  transition: 0.15s;
+}
+
+.choice-btn:hover {
+  border-color: #ffaa00;
+}
+
+.choice-btn.active {
+  background: #ffaa00;
+  border-color: #fff;
+  color: #000;
+  box-shadow: 0 0 10px rgba(255, 170, 0, 0.6);
+}
+
+/* 7. 로그라이크 카드 모달 */
+.card-container {
+  display: flex;
+  gap: 14px;
+  margin-top: 15px;
+}
+
+.card {
+  width: 185px;
+  height: 235px;
+  background: #161822;
+  border: 2px solid #3d4257;
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  cursor: pointer;
+  transition: transform 0.15s, border-color 0.15s;
+}
+
+.card:hover {
+  transform: translateY(-6px);
+  border-color: #ffcc00;
+  box-shadow: 0 0 15px rgba(255, 204, 0, 0.4);
+}
+
+.card-grade {
+  font-size: 13px;
+  font-weight: bold;
+}
+
+.card-title {
+  font-size: 17px;
+  margin: 8px 0;
+  color: #fff;
+}
+
+.card-desc {
+  font-size: 13px;
+  color: #8892b0;
+  line-height: 1.5;
+}
+
+/* 8. 결과 화면 및 전투 리포트 */
+.score-display {
+  font-size: 22px;
+  margin-bottom: 6px;
+}
+
+.rank-display {
+  font-size: 28px;
+  color: #ffcc00;
+  margin-bottom: 12px;
+}
+
+.report-box {
+  width: 440px;
+  background: #161822;
+  border: 1px solid #3d4257;
+  padding: 12px 18px;
+  border-radius: 6px;
+  margin-bottom: 12px;
+  text-align: left;
+}
+
+.report-title {
+  font-size: 15px;
+  color: #00e5ff;
+  margin-bottom: 6px;
+  border-bottom: 1px solid #2a2e40;
+  padding-bottom: 4px;
+}
+
+.report-content {
+  font-size: 13px;
+  color: #ccd6f6;
+  line-height: 1.6;
+}
+
+.initials-box {
+  background: #251e12;
+  border: 2px solid #ffaa00;
+  padding: 12px 20px;
+  border-radius: 6px;
+  margin-bottom: 12px;
+}
+
+.initials-alert {
+  font-size: 16px;
+  color: #ffcc00;
+  margin-bottom: 6px;
+  animation: blinkAnim 1.2s infinite;
+}
+
+.input-row {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+}
+
+#input-initials {
+  width: 90px;
+  background: #111;
+  border: 2px solid #ffcc00;
+  color: #fff;
+  font-size: 20px;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 4px;
+  outline: none;
+}
+
+/* 9. 명예의 전당 3단 시상대 모달 */
+.modal-box {
+  width: 520px;
+  background: #161822;
+  border: 2px solid #555d75;
+  border-radius: 8px;
+  padding: 20px;
+  text-align: center;
+  max-height: 85%;
+  overflow-y: auto;
+}
+
+.wide-box {
+  width: 780px;
+}
+
+.podium-grid {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 15px;
+}
+
+.podium-column {
+  flex: 1;
+  background: #0f111a;
+  border: 1px solid #2a2e40;
+  border-radius: 6px;
+  padding: 10px;
+}
+
+.podium-header {
+  font-size: 15px;
+  padding: 6px 0;
+  border-bottom: 2px solid #333;
+  margin-bottom: 8px;
+}
+
+.easy-header { color: #4ade80; border-color: #4ade80; }
+.normal-header { color: #f59e0b; border-color: #f59e0b; }
+.hard-header { color: #ef4444; border-color: #ef4444; }
+
+.podium-list {
+  font-size: 13px;
+  line-height: 2.0;
+  text-align: left;
+}
+
+.podium-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 2px 4px;
+  border-bottom: 1px solid #1a1e2d;
+}
+
+.rules-content {
+  text-align: left;
+  font-size: 14px;
+  color: #ccd6f6;
+  line-height: 1.6;
+  margin: 15px 0;
+}
+
+/* 10. 모바일 가상 터치 컨트롤러 (D-Pad & 액션) */
+#mobile-controls {
+  position: absolute;
+  bottom: 15px;
+  left: 0;
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  padding: 0 25px;
+  pointer-events: none;
+  z-index: 15;
+}
+
+/* 좌측 십자 D-Pad 그리드 */
+.dpad-container {
+  display: grid;
+  grid-template-columns: repeat(3, 44px);
+  grid-template-rows: repeat(3, 44px);
+  gap: 4px;
+  pointer-events: auto;
+}
+
+.dpad-btn {
+  background: rgba(255, 255, 255, 0.2);
+  border: 2px solid rgba(255, 255, 255, 0.5);
+  border-radius: 6px;
+  color: #fff;
+  font-size: 18px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  touch-action: manipulation;
+  cursor: pointer;
+}
+
+.dpad-btn:active {
+  background: rgba(255, 204, 0, 0.6);
+  border-color: #fff;
+}
+
+.dpad-up    { grid-column: 2; grid-row: 1; }
+.dpad-left  { grid-column: 1; grid-row: 2; }
+.dpad-down  { grid-column: 2; grid-row: 3; }
+.dpad-right { grid-column: 3; grid-row: 2; }
+
+/* 우측 액션 버튼 */
+.action-container {
+  display: flex;
+  gap: 14px;
+  pointer-events: auto;
+}
+
+.action-btn {
+  width: 58px;
+  height: 58px;
+  background: rgba(239, 68, 68, 0.4);
+  border: 2px solid rgba(255, 255, 255, 0.6);
+  border-radius: 50%;
+  color: #fff;
+  font-size: 22px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  touch-action: manipulation;
+  cursor: pointer;
+}
+
+.action-btn:active {
+  background: rgba(239, 68, 68, 0.8);
+  transform: scale(0.95);
+}
+
+.btn-skill {
+  background: rgba(56, 189, 248, 0.4);
+}
+
+.btn-skill:active {
+  background: rgba(56, 189, 248, 0.8);
+}
