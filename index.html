@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>도전! 3분 용사</title>
+  <link rel="stylesheet" href="style.css">
+
+  <!-- Firebase SDK (호환성 높은 Compat CDN 버전) -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+</head>
+<body>
+
+<div id="game-container">
+  <!-- 게임 메인 캔버스 (900 x 500) -->
+  <canvas id="gameCanvas" width="900" height="500"></canvas>
+
+  <!-- 1. 타이틀 화면 -->
+  <div id="screen-title" class="overlay">
+    <h1 class="pixel-text arcade-title">도전! 3분 용사</h1>
+    <div class="blink-text retro-prompt">[ PRESS START ]</div>
+    <div class="menu-btn-group">
+      <button class="btn" onclick="showSelectScreen()">게임 시작</button>
+      <button class="btn" onclick="showRules()">게임 설명</button>
+      <button class="btn" onclick="openLeaderboard()">명예의 전당</button>
+    </div>
+  </div>
+
+  <!-- 2. 캐릭터 및 난이도 선택 화면 -->
+  <div id="screen-select" class="overlay" style="display:none;">
+    <h2 class="pixel-text">용사 및 난이도 선택</h2>
+    
+    <div class="select-label">용사 선택</div>
+    <div class="select-group">
+      <button class="choice-btn" onclick="selectChar('warrior', this)">🥷 전사 (하트 5)</button>
+      <button class="choice-btn" onclick="selectChar('mage', this)">🧙 마법사 (하트 3)</button>
+      <button class="choice-btn" onclick="selectChar('archer', this)">🧝 궁수 (하트 3)</button>
+    </div>
+
+    <div class="select-label">난이도 선택</div>
+    <div class="select-group">
+      <button class="choice-btn" onclick="selectDiff('easy', this)">쉬움</button>
+      <button class="choice-btn" onclick="selectDiff('normal', this)">보통</button>
+      <button class="choice-btn" onclick="selectDiff('hard', this)">어려움</button>
+    </div>
+
+    <button id="btn-depart" class="btn btn-primary" style="margin-top:20px;" disabled onclick="startGame()">출발하기</button>
+    <button class="btn" style="background:#444;" onclick="backToTitle()">메인으로</button>
+  </div>
+
+  <!-- 3. 로그라이크 카드 선택 모달 (100점 달성 시) -->
+  <div id="modal-upgrade" class="overlay" style="display:none;">
+    <h2 class="pixel-text" style="color:#ffcc00;">능력 강화 (100점 달성)</h2>
+    <div class="card-container" id="cards-box"></div>
+  </div>
+
+  <!-- 4. 게임 종료 / 결산 화면 -->
+  <div id="modal-result" class="overlay" style="display:none;">
+    <h1 id="result-title" class="pixel-text">게임 종료</h1>
+    <div class="score-display">최종 점수: <span id="res-score" style="color:#ffcc00;">000,000</span> P</div>
+    <div class="rank-display">최종 랭크: <span id="res-rank">C</span></div>
+
+    <!-- 세부 전투 리포트 박스 -->
+    <div id="report-box" class="report-box">
+      <div class="report-title">[ 전투 리포트 ]</div>
+      <div id="report-content" class="report-content"></div>
+    </div>
+
+    <!-- 명예의 전당 3자리 이니셜 입력 슬롯 (TOP 3 진입 시 활성화) -->
+    <div id="initials-entry-box" class="initials-box" style="display:none;">
+      <div class="initials-alert">🏆 명예의 전당 TOP 3 입성! 🏆</div>
+      <div style="font-size:14px; margin-bottom:8px; color:#aaa;">이니셜 (최대 3자리 영문/숫자)을 입력하세요:</div>
+      <div class="input-row">
+        <input type="text" id="input-initials" maxlength="3" placeholder="AAA" autocomplete="off">
+        <button id="btn-save-score" class="btn btn-small" onclick="submitInitialScore()">등록</button>
+      </div>
+    </div>
+
+    <button class="btn" style="margin-top:15px;" onclick="backToTitle()">메인 화면으로</button>
+  </div>
+
+  <!-- 5. 명예의 전당 (난이도별 TOP 1~3 실시간 팝업) -->
+  <div id="modal-records" class="overlay" style="display:none;">
+    <div class="modal-box wide-box">
+      <h2 class="pixel-text" style="color:#ffcc00;">🏆 명예의 전당 (HALL OF FAME)</h2>
+      <div class="podium-grid">
+        <!-- 쉬움 TOP 3 -->
+        <div class="podium-column">
+          <div class="podium-header easy-header">쉬움 (EASY)</div>
+          <div id="podium-easy" class="podium-list">로딩 중...</div>
+        </div>
+        <!-- 보통 TOP 3 -->
+        <div class="podium-column">
+          <div class="podium-header normal-header">보통 (NORMAL)</div>
+          <div id="podium-normal" class="podium-list">로딩 중...</div>
+        </div>
+        <!-- 어려움 TOP 3 -->
+        <div class="podium-column">
+          <div class="podium-header hard-header">어려움 (HARD)</div>
+          <div id="podium-hard" class="podium-list">로딩 중...</div>
+        </div>
+      </div>
+      <button class="btn" style="margin-top:20px;" onclick="closeLeaderboard()">닫기</button>
+    </div>
+  </div>
+
+  <!-- 6. 게임 설명 모달 -->
+  <div id="modal-rules" class="overlay" style="display:none;">
+    <div class="modal-box">
+      <h2 class="pixel-text">게임 설명</h2>
+      <div class="rules-content">
+        <b>[목표]</b><br>
+        180초 안에 1,500m를 주파하여 최종 마왕을 격파하세요!<br><br>
+        <b>[PC 조작법]</b><br>
+        - 이동: 방향키 (←, →)<br>
+        - 점프: 방향키 (↑) / 2층에서 하향 점프: 방향키 (↓)<br>
+        - 기본 공격: A 키 (쿨타임 적용) / 특수 스킬: S 키<br><br>
+        <b>[모바일 조작법]</b><br>
+        - 화면 좌측 십자 D-Pad: 이동, 점프, 하향점프<br>
+        - 화면 우측 버튼: A (공격), S (스킬)<br><br>
+        <b>[전투 및 보스 기믹]</b><br>
+        - 몬스터 체력은 머리 위에 숫자로 표시됩니다.<br>
+        - 보스는 폭탄 장판 경고 후 12프레임 폭탄이 폭발합니다. 빈 공간이나 반대 층으로 대피하세요!
+      </div>
+      <button class="btn" style="margin-top:15px;" onclick="closeRules()">닫기</button>
+    </div>
+  </div>
+
+  <!-- 7. 모바일 터치 전용 컨트롤러 (좌측 십자 D-Pad, 우측 공격 버튼) -->
+  <div id="mobile-controls">
+    <!-- 좌측: 십자 D-Pad -->
+    <div class="dpad-container">
+      <div class="dpad-btn dpad-up" id="btn-m-up">▲</div>
+      <div class="dpad-btn dpad-left" id="btn-m-left">◀</div>
+      <div class="dpad-btn dpad-down" id="btn-m-down">▼</div>
+      <div class="dpad-btn dpad-right" id="btn-m-right">▶</div>
+    </div>
+    <!-- 우측: 전투 액션 버튼 -->
+    <div class="action-container">
+      <div class="action-btn" id="btn-m-atk">A</div>
+      <div class="action-btn btn-skill" id="btn-m-skill">S</div>
+    </div>
+  </div>
+</div>
+
+<!-- 8. 스크립트 로드 (Firebase 초기화 후 게임 엔진 실행) -->
+<script src="firebase.js"></script>
+<script src="game.js"></script>
+</body>
+</html>
