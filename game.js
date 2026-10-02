@@ -559,18 +559,29 @@ function update(dt) {
   }
 }
 
-// --- 8. 스타 유즈맵식 보스 폭탄피하기 시스템 ---
+// --- 8. 스타 유즈맵식 보스 폭탄피하기 시스템 (GIF 첫 프레임 재생 보장) ---
 function spawnBossBomb(x, y, assetKey, emoji, warningSec = 0.6) {
+  // 폭탄 생성 시마다 GIF를 1프레임부터 재생하도록 개별 이미지 인스턴스 생성
+  let bombImg = null;
+  if (assetKey === 'effect_fireball') {
+    bombImg = new Image();
+    bombImg.src = 'assets/effects/fire_ball.gif?t=' + Date.now() + Math.random();
+  } else if (assetKey === 'effect_darkorb') {
+    bombImg = new Image();
+    bombImg.src = 'assets/effects/dark_orb.gif?t=' + Date.now() + Math.random();
+  }
+
   bossBombs.push({
     x: x,
     y: y,
     width: 64,
     height: 64,
     assetKey: assetKey,
+    imgInstance: bombImg,
     emoji: emoji,
-    state: 'warning', // warning -> exploding -> dead
+    state: 'warning',
     timer: warningSec,
-    explodeTimer: 0.9, // 900ms 12프레임 폭발 재생
+    explodeTimer: 0.9, // 12프레임(900ms) 유지
     hitDone: false
   });
 }
@@ -1056,9 +1067,20 @@ function render() {
       ctx.fill();
       ctx.restore();
     } else if (b.state === 'exploding') {
-      // 900ms 12프레임 폭탄 폭발 GIF (없으면 이모지/원형 대체)
+      // 900ms 12프레임 폭탄 폭발 GIF 렌더링 + 발광 이펙트
       ctx.save();
-      if (ASSETS.images[b.assetKey]) {
+      
+      // 폭발 중심 발광 효과 (GIF가 없거나 로딩 중이어도 시각 효과 유지)
+      let glowColor = b.assetKey === 'effect_fireball' ? 'rgba(255, 68, 0, 0.4)' : 'rgba(168, 85, 247, 0.4)';
+      ctx.fillStyle = glowColor;
+      ctx.beginPath();
+      ctx.arc(bx + 32, b.y + 32, 34, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 전용 GIF 인스턴스 렌더링 (없으면 기존 캐시 이미지, 둘 다 없으면 이모지)
+      if (b.imgInstance && b.imgInstance.complete && b.imgInstance.naturalWidth > 0) {
+        ctx.drawImage(b.imgInstance, bx, b.y, b.width, b.height);
+      } else if (ASSETS.images[b.assetKey]) {
         ctx.drawImage(ASSETS.images[b.assetKey], bx, b.y, b.width, b.height);
       } else {
         ctx.font = '40px "NeoDunggeunGothicPro", sans-serif';
