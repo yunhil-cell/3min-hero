@@ -27,13 +27,14 @@ body {
   overflow: hidden;
 }
 
-/* 3. 캔버스 컨테이너 (900 x 500) */
+/* 3. 캔버스 컨테이너 (기기 화면 인식 유동형 반응형) */
 #game-container {
   position: relative;
-  width: 900px;
-  height: 500px;
+  width: min(900px, 98vw, calc(96vh * (900 / 500)));
+  height: min(500px, calc(98vw * (500 / 900)), 96vh);
+  aspect-ratio: 900 / 500;
   background: #000;
-  border: 3px solid #333;
+  border: 2px solid #333;
   box-shadow: 0 0 30px rgba(0, 0, 0, 0.95);
   overflow: hidden;
 }
@@ -290,18 +291,18 @@ h2 {
 
 /* 9. 명예의 전당 3단 시상대 모달 */
 .modal-box {
-  width: 520px;
+  width: min(520px, 94%);
   background: #161822;
   border: 2px solid #555d75;
   border-radius: 8px;
-  padding: 20px;
+  padding: 16px;
   text-align: center;
-  max-height: 85%;
+  max-height: 90%;
   overflow-y: auto;
 }
 
 .wide-box {
-  width: 780px;
+  width: min(780px, 96%);
 }
 
 .podium-grid {
