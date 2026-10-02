@@ -2,13 +2,18 @@
 // [도전! 3분 용사] 게임 엔진 (game.js)
 // =============================================================================
 
-// --- 1. 에셋 로더 (이미지 부재 시 이모티콘 Fallback 자동 적용) ---
+// --- 1. 에셋 로더 (DOM 등록을 통한 GIF 실시간 애니메이션 강제 활성화) ---
 const ASSETS = {
   images: {},
   load(key, src) {
     const img = new Image();
     img.src = src;
-    img.onload = () => { ASSETS.images[key] = img; };
+    img.onload = () => { 
+      ASSETS.images[key] = img; 
+      // DOM에 실제로 등록하여 브라우저가 GIF 프레임을 계속 갱신하도록 강제
+      const preloader = document.getElementById('gif-preloader');
+      if (preloader) preloader.appendChild(img);
+    };
     img.onerror = () => { ASSETS.images[key] = null; };
   }
 };
@@ -559,16 +564,19 @@ function update(dt) {
   }
 }
 
-// --- 8. 스타 유즈맵식 보스 폭탄피하기 시스템 (GIF 첫 프레임 재생 보장) ---
+// --- 8. 스타 유즈맵식 보스 폭탄피하기 시스템 (GIF 첫 프레임 재생 보장 및 DOM 마운트) ---
 function spawnBossBomb(x, y, assetKey, emoji, warningSec = 0.6) {
-  // 폭탄 생성 시마다 GIF를 1프레임부터 재생하도록 개별 이미지 인스턴스 생성
   let bombImg = null;
+  const preloader = document.getElementById('gif-preloader');
+  
   if (assetKey === 'effect_fireball') {
     bombImg = new Image();
     bombImg.src = 'assets/effects/fire_ball.gif?t=' + Date.now() + Math.random();
+    if (preloader) preloader.appendChild(bombImg);
   } else if (assetKey === 'effect_darkorb') {
     bombImg = new Image();
     bombImg.src = 'assets/effects/dark_orb.gif?t=' + Date.now() + Math.random();
+    if (preloader) preloader.appendChild(bombImg);
   }
 
   bossBombs.push({
@@ -581,7 +589,7 @@ function spawnBossBomb(x, y, assetKey, emoji, warningSec = 0.6) {
     emoji: emoji,
     state: 'warning',
     timer: warningSec,
-    explodeTimer: 0.9, // 12프레임(900ms) 유지
+    explodeTimer: 0.9,
     hitDone: false
   });
 }
@@ -693,7 +701,8 @@ function doNormalAttack() {
       x: player.facing === 1 ? player.x + player.width : player.x - reach,
       y: player.y - 15,
       width: reach,
-      height: player.height + 30
+      height: player.height + 30,
+      isCustomBox: true // 공격 판정 범위 보존
     };
 
     particles.push({
@@ -944,11 +953,31 @@ function spawnFloatingText(x, y, text) {
   floatingTexts.push({ x, y, text, alpha: 1.0 });
 }
 
+// [정밀 히트박스] 투명한 여백을 깎아내고 실제 눈에 보이는 캐릭터 몸통만 판정
+function getHitbox(e) {
+  if (e.isCustomBox) return e; // 칼날 검기나 번개 공격 범위는 원본 크기 유지
+
+  // 캐릭터/몬스터의 투명 여백(약 22%)을 제외한 실제 몸체 영역만 계산
+  let padX = e.width * 0.22;
+  let padTop = e.height * 0.15;
+  let padBottom = e.height * 0.05;
+
+  return {
+    x: e.x + padX,
+    y: e.y + padTop,
+    width: e.width - (padX * 2),
+    height: e.height - padTop - padBottom
+  };
+}
+
 function checkRectCollide(r1, r2) {
-  return (r1.x < r2.x + r2.width &&
-          r1.x + r1.width > r2.x &&
-          r1.y < r2.y + r2.height &&
-          r1.y + r1.height > r2.y);
+  const b1 = r1.isCustomBox ? r1 : getHitbox(r1);
+  const b2 = r2.isCustomBox ? r2 : getHitbox(r2);
+
+  return (b1.x < b2.x + b2.width &&
+          b1.x + b1.width > b2.x &&
+          b1.y < b2.y + b2.height &&
+          b1.y + b1.height > b2.y);
 }
 
 function createSparks(x, y, color, count) {
