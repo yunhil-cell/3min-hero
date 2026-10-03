@@ -442,7 +442,7 @@ h2 {
   display: flex;
   justify-content: center;
   align-items: center;
-  touch-action: manipulation;
+  touch-action: none; /* 브라우저 제스처 차단으로 멀티터치 씹힘 원천 방지 */
   cursor: pointer;
 }
 
