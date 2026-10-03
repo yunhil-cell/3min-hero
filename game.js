@@ -1126,8 +1126,8 @@ function render() {
     let sx = m.x - cameraX;
     let isVisible = (sx >= -80 && sx <= 950);
 
-    // 네이티브 GIF DOM 엔진 동기화 (움직임 보장)
-    syncEntityDOM('mob_' + m.id, `assets/monsters/${m.type}.gif`, sx, m.y, m.width, m.height, -1, m.hitFlash > 0, isVisible);
+    // 네이티브 GIF DOM 엔진 동기화 (원본 좌측 시선 유지)
+    syncEntityDOM('mob_' + m.id, `assets/monsters/${m.type}.gif`, sx, m.y, m.width, m.height, 1, m.hitFlash > 0, isVisible);
 
     // 이미지 부재 시 캔버스 백업 이모티콘
     if (!ASSETS.images[m.assetKey]) {
@@ -1152,8 +1152,8 @@ function render() {
     if (b && b.active) {
       let bx = b.x - cameraX;
 
-      // 보스 96x96 네이티브 GIF DOM 동기화
-      syncEntityDOM('boss_' + b.type, `assets/monsters/${b.type === 'dragon' ? 'dragon' : 'demon'}.gif`, bx, b.y, b.width, b.height, -1, b.hitFlash > 0, true);
+      // 보스 96x96 네이티브 GIF DOM 동기화 (원본 좌측 시선 유지)
+      syncEntityDOM('boss_' + b.type, `assets/monsters/${b.type === 'dragon' ? 'dragon' : 'demon'}.gif`, bx, b.y, b.width, b.height, 1, b.hitFlash > 0, true);
 
       // 이미지 부재 시 백업 이모티콘
       if (!ASSETS.images[b.assetKey]) {
