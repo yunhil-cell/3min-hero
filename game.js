@@ -234,9 +234,9 @@ function startGame() {
 }
 window.startGame = startGame;
 
-// --- 5. 100점 달성 로그라이크 카드 업그레이드 ---
+// --- 5. 100점 달성 로그라이크 카드 업그레이드 (연속 카드 뽑기 멈춤 버그 해결) ---
 function triggerUpgrade() {
-  if (gameState !== 'PLAYING') return;
+  if (gameState !== 'PLAYING' && gameState !== 'UPGRADE') return;
   gameState = 'UPGRADE';
 
   const container = document.getElementById('cards-box');
@@ -351,18 +351,23 @@ function spawnMonsterAtX(targetX, force2F = false) {
 }
 
 function checkBossSpawn() {
-  // 드래곤 (600m = 6,000px)
+  // 중간보스 드래곤: 정확한 2배 확대 (192x192px)
   if (!bosses.dragon && player.x >= 580 * SCALE_X) {
+    // 보스전 시작 시 화면의 모든 잡몹 및 잡몹 투사체 즉시 제거
+    monsters.forEach(m => removeEntityDOM('mob_' + m.id));
+    monsters = [];
+    projectiles = projectiles.filter(p => p.isPlayer);
+
     let dhp = selectedDiff === 'easy' ? 100 : (selectedDiff === 'normal' ? 200 : 300);
     bosses.dragon = {
       type: 'dragon',
       name: '드래곤',
       emoji: '🐉',
       assetKey: 'boss_dragon',
-      x: 600 * SCALE_X + 500,
-      y: FLOOR_2_Y - 96,
-      width: 96,
-      height: 96,
+      x: 600 * SCALE_X + 620,
+      y: FLOOR_1_Y - 192, // 1층 바닥에서 2층 발판 위까지 걸침
+      width: 192,
+      height: 192,
       hp: dhp,
       maxHp: dhp,
       points: 200,
@@ -373,18 +378,22 @@ function checkBossSpawn() {
     warningTimer = 2.0;
   }
 
-  // 마왕 (1,400m = 14,000px)
+  // 최종보스 마왕: 정확한 2배 확대 (192x192px)
   if (!bosses.demon && player.x >= 1380 * SCALE_X) {
+    monsters.forEach(m => removeEntityDOM('mob_' + m.id));
+    monsters = [];
+    projectiles = projectiles.filter(p => p.isPlayer);
+
     let mhp = selectedDiff === 'easy' ? 300 : (selectedDiff === 'normal' ? 500 : 700);
     bosses.demon = {
       type: 'demon',
       name: '마왕',
       emoji: '👿',
       assetKey: 'boss_demon',
-      x: 1400 * SCALE_X + 500,
-      y: FLOOR_1_Y - 96,
-      width: 96,
-      height: 96,
+      x: 1400 * SCALE_X + 620,
+      y: FLOOR_1_Y - 192,
+      width: 192,
+      height: 192,
       hp: mhp,
       maxHp: mhp,
       points: 500,
@@ -481,10 +490,11 @@ function update(dt) {
     cameraX = Math.max(0, player.x - 200);
   }
 
-  // 거리 스폰
+  // 거리 스폰 (보스 전투 중일 때는 잡몹 스폰 전면 차단)
   checkBossSpawn();
+  let isBossFighting = (bosses.dragon && bosses.dragon.active) || (bosses.demon && bosses.demon.active);
   let spawnInterval = getDiffSpawnDistance();
-  if (player.x - lastDistanceSpawn >= spawnInterval && player.x < 1350 * SCALE_X) {
+  if (!isBossFighting && player.x - lastDistanceSpawn >= spawnInterval && player.x < 1350 * SCALE_X) {
     spawnMonsterAtX(player.x + 850);
     lastDistanceSpawn = player.x;
   }
@@ -1167,6 +1177,37 @@ function render() {
   ctx.fillStyle = gCol;
   ctx.fillRect(0, FLOOR_1_Y, canvas.width, 6);
 
+  // [보스전 진입 알림 표지판 렌더링 (570m, 1,370m 지점)]
+  const signposts = [
+    { dist: 570, title: '⚠️ BOSS AHEAD', desc: '중간보스 : 드래곤' },
+    { dist: 1370, title: '☠️ FINAL BOSS', desc: '최종보스 : 마왕' }
+  ];
+  signposts.forEach(sp => {
+    let sx = (sp.dist * SCALE_X) - cameraX;
+    if (sx >= -100 && sx <= canvas.width + 100) {
+      // 표지판 나무 기둥
+      ctx.fillStyle = '#78350f';
+      ctx.fillRect(sx + 36, FLOOR_1_Y - 95, 8, 95);
+      
+      // 표지판 팻말 패널
+      ctx.fillStyle = '#1c1917';
+      ctx.fillRect(sx - 15, FLOOR_1_Y - 120, 110, 45);
+      ctx.strokeStyle = '#f59e0b';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(sx - 15, FLOOR_1_Y - 120, 110, 45);
+
+      // 표지판 경고 텍스트
+      ctx.fillStyle = '#ef4444';
+      ctx.font = 'bold 12px "NeoDunggeunGothicPro"';
+      ctx.textAlign = 'center';
+      ctx.fillText(sp.title, sx + 40, FLOOR_1_Y - 102);
+
+      ctx.fillStyle = '#f59e0b';
+      ctx.font = '11px "NeoDunggeunGothicPro"';
+      ctx.fillText(sp.desc, sx + 40, FLOOR_1_Y - 84);
+    }
+  });
+
   // 2. 스타 폭탄피하기 장판 렌더링
   bossBombs.forEach(b => {
     let bx = b.x - cameraX;
@@ -1222,12 +1263,14 @@ function render() {
       ctx.restore();
     }
 
-    // 머리 위 정수 숫자 체력 표기
-    ctx.font = '14px "NeoDunggeunGothicPro"';
+    // 머리 위 정수 숫자 체력 표기 (18px 확대 및 배경 대비 검은 외곽선 추가)
+    ctx.font = 'bold 18px "NeoDunggeunGothicPro"';
     ctx.textAlign = 'center';
-    ctx.fillStyle = '#ef4444';
-    ctx.fillText(`HP ${m.hp}`, sx + m.width / 2, m.y - 8);
-  });
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = 3;
+    ctx.strokeText(`HP ${m.hp}`, sx + m.width / 2, m.y - 10);
+    ctx.fillStyle = '#ff4444';
+    ctx.fillText(`HP ${m.hp}`, sx + m.width / 2, m.y - 10);
 
   // 4. 보스 렌더링 & [실시간 대형 GIF DOM 동기화]
   [bosses.dragon, bosses.demon].forEach(b => {
