@@ -1058,43 +1058,114 @@ function render() {
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  // 1. 3단계 거리별 배경 및 바닥 색상
+  // 1. [테마별 배경 & 전환 그라데이션 연출]
   let curDist = player ? player.x / SCALE_X : 0;
-  let skyColor = '#111827';
-  let groundColor = '#22c55e';
 
-  if (curDist >= 1400) {
-    skyColor = '#1a0b2e';
-    groundColor = '#581c87';
-  } else if (curDist >= 600) {
-    skyColor = '#2d150b';
-    groundColor = '#b45309';
+  // 거리 기반 테마 블렌딩 비율 계산 (550~650m, 1350~1450m 전환 구간)
+  let w1 = 0, w2 = 0, w3 = 0;
+  if (curDist < 550) {
+    w1 = 1;
+  } else if (curDist < 650) {
+    let t = (curDist - 550) / 100;
+    w1 = 1 - t; w2 = t;
+  } else if (curDist < 1350) {
+    w2 = 1;
+  } else if (curDist < 1450) {
+    let t = (curDist - 1350) / 100;
+    w2 = 1 - t; w3 = t;
+  } else {
+    w3 = 1;
   }
 
-  ctx.fillStyle = skyColor;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  // (1) 1구간 : 여명의 초원 (0 ~ 600m)
+  if (w1 > 0) {
+    ctx.save();
+    ctx.globalAlpha = w1;
+    let skyGrd = ctx.createLinearGradient(0, 0, 0, FLOOR_1_Y);
+    skyGrd.addColorStop(0, '#1e3a8a');
+    skyGrd.addColorStop(0.6, '#38bdf8');
+    skyGrd.addColorStop(1, '#bae6fd');
+    ctx.fillStyle = skyGrd;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
-  for (let m = 0; m <= STAGE_LENGTH; m += 50) {
-    let scrX = (m * SCALE_X) - cameraX;
-    if (scrX >= -50 && scrX <= canvas.width + 50) {
-      ctx.beginPath();
-      ctx.moveTo(scrX, 0); ctx.lineTo(scrX, canvas.height);
-      ctx.stroke();
+    // 원경 산맥 실루엣 (느린 패럴랙스)
+    ctx.fillStyle = '#166534';
+    ctx.beginPath();
+    ctx.moveTo(0, FLOOR_1_Y);
+    for (let x = 0; x <= canvas.width; x += 150) {
+      let h = Math.sin((x + cameraX * 0.2) * 0.01) * 45 + 70;
+      ctx.lineTo(x, FLOOR_1_Y - h);
     }
+    ctx.lineTo(canvas.width, FLOOR_1_Y);
+    ctx.fill();
+    ctx.restore();
   }
+
+  // (2) 2구간 : 화염 협곡 (600 ~ 1400m)
+  if (w2 > 0) {
+    ctx.save();
+    ctx.globalAlpha = w2;
+    let skyGrd = ctx.createLinearGradient(0, 0, 0, FLOOR_1_Y);
+    skyGrd.addColorStop(0, '#450a0a');
+    skyGrd.addColorStop(0.5, '#991b1b');
+    skyGrd.addColorStop(1, '#ea580c');
+    ctx.fillStyle = skyGrd;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // 뾰족한 바위산 실루엣
+    ctx.fillStyle = '#431407';
+    ctx.beginPath();
+    ctx.moveTo(0, FLOOR_1_Y);
+    for (let x = 0; x <= canvas.width; x += 120) {
+      let h = ((x + Math.floor(cameraX * 0.2)) % 240 < 120) ? 95 : 40;
+      ctx.lineTo(x, FLOOR_1_Y - h);
+    }
+    ctx.lineTo(canvas.width, FLOOR_1_Y);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // (3) 3구간 : 심연의 마왕성 (1400m 이상)
+  if (w3 > 0) {
+    ctx.save();
+    ctx.globalAlpha = w3;
+    let skyGrd = ctx.createLinearGradient(0, 0, 0, FLOOR_1_Y);
+    skyGrd.addColorStop(0, '#090214');
+    skyGrd.addColorStop(0.7, '#2e1065');
+    skyGrd.addColorStop(1, '#581c87');
+    ctx.fillStyle = skyGrd;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // 붉은 보름달
+    ctx.fillStyle = 'rgba(239, 68, 68, 0.4)';
+    ctx.beginPath();
+    ctx.arc(canvas.width - 150, 100, 45, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 고딕 성채 기둥 실루엣
+    ctx.fillStyle = '#1e0b36';
+    for (let x = -50; x < canvas.width + 100; x += 140) {
+      let colX = x - (Math.floor(cameraX * 0.15) % 140);
+      ctx.fillRect(colX, 60, 36, FLOOR_1_Y - 60);
+    }
+    ctx.restore();
+  }
+
+  // 지형 바닥 및 2층 발판 (테마별 색상 블렌딩)
+  let pCol = w3 > 0.5 ? '#701a75' : (w2 > 0.5 ? '#78350f' : '#65a30d');
+  let gCol = w3 > 0.5 ? '#3b0764' : (w2 > 0.5 ? '#b45309' : '#22c55e');
 
   // 2층 발판 (상단)
-  ctx.fillStyle = '#4b5563';
+  ctx.fillStyle = pCol;
   ctx.fillRect(0, FLOOR_2_Y, canvas.width, 10);
-  ctx.fillStyle = '#9ca3af';
+  ctx.fillStyle = 'rgba(255,255,255,0.2)';
   ctx.fillRect(0, FLOOR_2_Y, canvas.width, 3);
 
   // 1층 바닥 (하단)
-  ctx.fillStyle = '#1f2937';
+  ctx.fillStyle = '#1e293b';
   ctx.fillRect(0, FLOOR_1_Y, canvas.width, canvas.height - FLOOR_1_Y);
-  ctx.fillStyle = groundColor;
-  ctx.fillRect(0, FLOOR_1_Y, canvas.width, 5);
+  ctx.fillStyle = gCol;
+  ctx.fillRect(0, FLOOR_1_Y, canvas.width, 6);
 
   // 2. 스타 폭탄피하기 장판 렌더링
   bossBombs.forEach(b => {
@@ -1244,9 +1315,9 @@ function render() {
       ctx.fill();
     }
 
-    // 플레이어 64x64 실시간 네이티브 GIF DOM 동기화
-    let isBlink = player.invincibleTimer > 0 && Math.floor(Date.now() / 80) % 2 === 0;
-    syncEntityDOM('player_sprite', `assets/heroes/${selectedChar}.gif`, px, player.y, player.width, player.height, player.facing, false, !isBlink);
+    // 플레이어 실시간 GIF 동기화 (무적 시간에는 사라지지 않고 45% 반투명 유지)
+    let heroOpacity = player.invincibleTimer > 0 ? 0.45 : 1.0;
+    syncEntityDOM('player_sprite', `assets/heroes/${selectedChar}.gif`, px, player.y, player.width, player.height, player.facing, false, true, heroOpacity);
 
     // 이미지 부재 시 대체 이모티콘
     if (!ASSETS.images['hero_' + selectedChar]) {
@@ -1421,7 +1492,7 @@ function getEntityLayer() {
   return layer;
 }
 
-function syncEntityDOM(id, src, x, y, w, h, facing = 1, flash = false, visible = true) {
+function syncEntityDOM(id, src, x, y, w, h, facing = 1, flash = false, visible = true, opacity = 1.0) {
   const layer = getEntityLayer();
   if (!layer) return;
 
@@ -1447,6 +1518,7 @@ function syncEntityDOM(id, src, x, y, w, h, facing = 1, flash = false, visible =
   el.style.height = (h / 500 * 100) + '%';
   el.style.transform = facing === -1 ? 'scaleX(-1)' : 'scaleX(1)';
   el.style.filter = flash ? 'brightness(3)' : 'none';
+  el.style.opacity = opacity; // 반투명 적용
 }
 
 function removeEntityDOM(id) {
