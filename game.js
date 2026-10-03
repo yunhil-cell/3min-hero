@@ -337,7 +337,7 @@ function spawnMonsterAtX(targetX, force2F = false) {
     maxHp: hp,
     points: pts,
     floor: is2F ? 2 : 1,
-    shootTimer: Math.random() * 1.5,
+    shootTimer: 0, // 스폰 직후 즉시 공격하지 않고 최소 3.5초 딜레이 부여
     jumpTimer: Math.random() * 2,
     vy: 0,
     isGrounded: true,
@@ -553,13 +553,15 @@ function update(dt) {
     } 
     else if (m.type === 'skeleton') {
       m.shootTimer += dt;
-      if (m.shootTimer > 2.0) {
+      // 공격 주기를 2.0초에서 3.5초로 대폭 완화
+      if (m.shootTimer > 3.5) {
         m.shootTimer = 0;
         let angle = Math.atan2((player.y + 20) - (m.y + 15), (player.x + 16) - m.x);
         projectiles.push({
           x: m.x, y: m.y + 15, width: 16, height: 16,
-          vx: Math.cos(angle) * 230, vy: Math.sin(angle) * 230,
-          life: 3, isPlayer: false, isEmoji: true, emojiText: '🦴', isCustomBox: true
+          // 탄속도 230에서 185로 완화하여 점프로 피하기 쉽게 조정
+          vx: Math.cos(angle) * 185, vy: Math.sin(angle) * 185,
+          life: 3.5, isPlayer: false, isEmoji: true, emojiText: '🦴', isCustomBox: true
         });
       }
     }
@@ -1546,23 +1548,38 @@ function triggerJump() {
   }
 }
 
+// [키 동시입력 고스팅 방지] 방향키 외에 WASD, Space, J/K, Z/X 보조키 전면 동시 지원
 window.addEventListener('keydown', e => {
-  if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) {
+  if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyS'].includes(e.code)) {
     e.preventDefault();
   }
 
-  if (e.code === 'ArrowLeft') keys.left = true;
+  // 좌우 이동 (방향키 또는 A / D)
+  if (e.code === 'ArrowLeft' || e.code === 'KeyD_disabled') keys.left = true;
   if (e.code === 'ArrowRight') keys.right = true;
+
+  // 하향 점프 (↓ 키 또는 S 키)
   if (e.code === 'ArrowDown') {
     keys.down = true;
     if (player && player.isGrounded && player.y < FLOOR_2_Y) {
       triggerJump();
     }
   }
-  if (e.code === 'ArrowUp') triggerJump();
 
-  if (e.code === 'KeyA') doNormalAttack();
-  if (e.code === 'KeyS') doSkill();
+  // 점프 (↑ 키 또는 Spacebar 또는 W 키)
+  if (e.code === 'ArrowUp' || e.code === 'Space' || e.code === 'KeyW') {
+    triggerJump();
+  }
+
+  // 기본 공격 (A 키 또는 J 키 또는 Z 키 - 동시입력 씹힘 방지)
+  if (e.code === 'KeyA' || e.code === 'KeyJ' || e.code === 'KeyZ') {
+    doNormalAttack();
+  }
+
+  // 특수 스킬 (S 키 또는 K 키 또는 X 키)
+  if (e.code === 'KeyS' || e.code === 'KeyK' || e.code === 'KeyX') {
+    doSkill();
+  }
 });
 
 window.addEventListener('keyup', e => {
