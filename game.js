@@ -27,6 +27,11 @@ ASSETS.load('boss_demon', 'assets/monsters/demon.gif');
 ASSETS.load('effect_fireball', 'assets/effects/fire_ball.gif');
 ASSETS.load('effect_darkorb', 'assets/effects/dark_orb.gif');
 
+// 버프 카드 및 HUD 트레이용 9종 아이콘 PNG 로드
+['heal', 'shield', 'speed', 'sharp', 'atk_up', 'cd_down', 'score_copy', 'max_hp', 'time'].forEach(id => {
+  ASSETS.load('icon_' + id, `assets/icons/${id}.png`);
+});
+
 // --- 2. 캔버스 및 전역 상태 ---
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
@@ -246,7 +251,11 @@ function triggerUpgrade() {
     el.innerHTML = `
       <div>
         <div class="card-grade" style="color:${card.color};">${card.grade}</div>
-        <div class="card-title">${card.icon} ${card.name}</div>
+        <div class="card-title" style="display:flex; align-items:center; gap:6px;">
+          <img src="assets/icons/${card.id}.png" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline';" style="width:24px; height:24px; image-rendering:pixelated;">
+          <span style="display:none;">${card.icon}</span>
+          <span>${card.name}</span>
+        </div>
       </div>
       <div class="card-desc">${card.desc}</div>
     `;
@@ -259,7 +268,8 @@ function triggerUpgrade() {
 
 function applyCard(id, icon) {
   stats.buffsCount++;
-  player.buffCounts[icon] = (player.buffCounts[icon] || 0) + 1;
+  // 아이콘 이미지 렌더링을 위해 카드 ID로 카운트 저장
+  player.buffCounts[id] = (player.buffCounts[id] || 0) + 1;
 
   if (id === 'heal') player.hearts = Math.min(player.maxHearts, player.hearts + 1);
   if (id === 'shield') player.shield = 1;
@@ -952,8 +962,9 @@ window.submitInitialScore = submitInitialScore;
 
 // --- 11. 시각 효과 및 판정 헬퍼 ---
 function triggerScreenShake(time, mag) {
-  screenShakeTimer = time;
-  screenShakeMag = mag;
+  // 화면 흔들림 완전 제거
+  screenShakeTimer = 0;
+  screenShakeMag = 0;
 }
 
 function spawnFloatingText(x, y, text) {
@@ -1166,18 +1177,24 @@ function render() {
         ctx.restore();
       }
 
-      // 상단 대형 보스 체력바
-      ctx.fillStyle = '#000';
-      ctx.fillRect(canvas.width/2 - 160, 20, 320, 16);
+      // 상단 HUD와 겹치지 않도록 Y=74 위치로 이동 + 배경 박스 추가
+      let barX = canvas.width / 2 - 160;
+      let barY = 74;
+
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+      ctx.fillRect(barX - 10, barY - 18, 340, 42); // 가독성용 암실 패널
+
+      ctx.fillStyle = '#111';
+      ctx.fillRect(barX, barY, 320, 16);
       ctx.fillStyle = '#dc2626';
-      ctx.fillRect(canvas.width/2 - 160, 20, 320 * (b.hp / b.maxHp), 16);
+      ctx.fillRect(barX, barY, 320 * (b.hp / b.maxHp), 16);
       ctx.strokeStyle = '#fff';
-      ctx.strokeRect(canvas.width/2 - 160, 20, 320, 16);
+      ctx.strokeRect(barX, barY, 320, 16);
       
-      ctx.fillStyle = '#fff';
+      ctx.fillStyle = '#ffcc00';
       ctx.font = '14px "NeoDunggeunGothicPro"';
       ctx.textAlign = 'center';
-      ctx.fillText(`보스 : ${b.name} (${b.hp} / ${b.maxHp})`, canvas.width/2, 33);
+      ctx.fillText(`보스 : ${b.name} (${b.hp} / ${b.maxHp})`, canvas.width / 2, barY - 4);
     }
   });
 
@@ -1337,15 +1354,29 @@ function render() {
     ctx.textAlign = 'right';
     ctx.fillText(`⏳ ${Math.ceil(timeLeft)}초`, canvas.width - 20, 30);
 
-    let buffStr = '';
-    for (let icon in player.buffCounts) {
-      buffStr += `[${icon} × ${player.buffCounts[icon]}] `;
-    }
-    if (buffStr) {
-      ctx.font = '14px "NeoDunggeunGothicPro"';
-      ctx.textAlign = 'left';
-      ctx.fillStyle = '#8892b0';
-      ctx.fillText(buffStr, 20, 56);
+    // 2열: 획득 버프 인벤토리 트레이 (업로드한 PNG 아이콘 우선 출력)
+    let trayX = 20;
+    for (let buffId in player.buffCounts) {
+      let count = player.buffCounts[buffId];
+      let iconImg = ASSETS.images['icon_' + buffId];
+      let cardDef = CARD_POOL.find(c => c.id === buffId);
+
+      if (iconImg && iconImg.complete && iconImg.naturalWidth > 0) {
+        ctx.drawImage(iconImg, trayX, 42, 18, 18);
+        ctx.fillStyle = '#8892b0';
+        ctx.font = '14px "NeoDunggeunGothicPro"';
+        ctx.textAlign = 'left';
+        ctx.fillText(`×${count}`, trayX + 22, 56);
+        trayX += 58;
+      } else {
+        let fallbackIcon = cardDef ? cardDef.icon : buffId;
+        ctx.fillStyle = '#8892b0';
+        ctx.font = '14px "NeoDunggeunGothicPro"';
+        ctx.textAlign = 'left';
+        let text = `[${fallbackIcon} ×${count}] `;
+        ctx.fillText(text, trayX, 56);
+        trayX += ctx.measureText(text).width + 6;
+      }
     }
 
     ctx.font = '14px "NeoDunggeunGothicPro"';
