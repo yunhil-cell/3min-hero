@@ -48,6 +48,26 @@ canvas#gameCanvas {
   image-rendering: crisp-edges;
 }
 
+/* GIF 실시간 애니메이션 레이어 (반응형 퍼센트 동기화) */
+#entity-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 5;
+}
+
+.game-entity-sprite {
+  position: absolute;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  transform-origin: center center;
+  will-change: transform, left, top;
+}
+
 /* 4. 오버레이 & 모달 공통 레이아웃 */
 .overlay {
   position: absolute;
