@@ -27,7 +27,7 @@ ASSETS.load('boss_demon', 'assets/monsters/demon.gif');
 ASSETS.load('effect_fireball', 'assets/effects/fire_ball.gif');
 ASSETS.load('effect_darkorb', 'assets/effects/dark_orb.gif');
 
-// 버프 카드 및 HUD 트레이용 9종 아이콘 PNG 로드
+// 9종 버프 아이콘 PNG 로드
 ['heal', 'shield', 'speed', 'sharp', 'atk_up', 'cd_down', 'score_copy', 'max_hp', 'time'].forEach(id => {
   ASSETS.load('icon_' + id, `assets/icons/${id}.png`);
 });
@@ -55,10 +55,6 @@ const FLOOR_2_Y = 320;     // 2층 발판 (차이 110px)
 
 let cameraX = 0;
 let lastDistanceSpawn = 0;
-
-// 레트로 화면 흔들림 (Screen Shake)
-let screenShakeTimer = 0;
-let screenShakeMag = 0;
 
 // 엔티티 고유 ID 생성 카운터
 let mobUid = 0;
@@ -234,7 +230,7 @@ function startGame() {
 }
 window.startGame = startGame;
 
-// --- 5. 100점 달성 로그라이크 카드 업그레이드 (연속 카드 뽑기 멈춤 버그 해결) ---
+// --- 5. 100점 달성 로그라이크 카드 업그레이드 ---
 function triggerUpgrade() {
   if (gameState !== 'PLAYING' && gameState !== 'UPGRADE') return;
   gameState = 'UPGRADE';
@@ -268,7 +264,6 @@ function triggerUpgrade() {
 
 function applyCard(id, icon) {
   stats.buffsCount++;
-  // 아이콘 이미지 렌더링을 위해 카드 ID로 카운트 저장
   player.buffCounts[id] = (player.buffCounts[id] || 0) + 1;
 
   if (id === 'heal') player.hearts = Math.min(player.maxHearts, player.hearts + 1);
@@ -351,9 +346,8 @@ function spawnMonsterAtX(targetX, force2F = false) {
 }
 
 function checkBossSpawn() {
-  // 중간보스 드래곤: 정확한 2배 확대 (192x192px)
+  // 중간보스 드래곤: 192x192 2배 확대 (1층 바닥에서 2층 발판 위까지 관통)
   if (!bosses.dragon && player.x >= 580 * SCALE_X) {
-    // 보스전 시작 시 화면의 모든 잡몹 및 잡몹 투사체 즉시 제거
     monsters.forEach(m => removeEntityDOM('mob_' + m.id));
     monsters = [];
     projectiles = projectiles.filter(p => p.isPlayer);
@@ -365,7 +359,7 @@ function checkBossSpawn() {
       emoji: '🐉',
       assetKey: 'boss_dragon',
       x: 600 * SCALE_X + 620,
-      y: FLOOR_1_Y - 192, // 1층 바닥에서 2층 발판 위까지 걸침
+      y: FLOOR_1_Y - 192,
       width: 192,
       height: 192,
       hp: dhp,
@@ -378,7 +372,7 @@ function checkBossSpawn() {
     warningTimer = 2.0;
   }
 
-  // 최종보스 마왕: 정확한 2배 확대 (192x192px)
+  // 최종보스 마왕: 192x192 2배 확대
   if (!bosses.demon && player.x >= 1380 * SCALE_X) {
     monsters.forEach(m => removeEntityDOM('mob_' + m.id));
     monsters = [];
@@ -473,7 +467,6 @@ function update(dt) {
   if (player.skillTimer > 0) player.skillTimer -= dt;
   if (player.normalAtkTimer > 0) player.normalAtkTimer -= dt;
   if (player.swingTimer > 0) player.swingTimer -= dt;
-  if (screenShakeTimer > 0) screenShakeTimer -= dt;
   if (warningTimer > 0) warningTimer -= dt;
 
   // 카메라 제어 (보스 조우 시 화면 잠금)
@@ -490,7 +483,7 @@ function update(dt) {
     cameraX = Math.max(0, player.x - 200);
   }
 
-  // 거리 스폰 (보스 전투 중일 때는 잡몹 스폰 전면 차단)
+  // 거리 스폰 (보스 전투 중일 때는 잡몹 스폰 차단)
   checkBossSpawn();
   let isBossFighting = (bosses.dragon && bosses.dragon.active) || (bosses.demon && bosses.demon.active);
   let spawnInterval = getDiffSpawnDistance();
@@ -573,7 +566,6 @@ function update(dt) {
 
     if (checkRectCollide(player, m)) hitPlayer();
 
-    // 화면 뒤로 지나간 몬스터 제거 및 DOM 잔상 정리
     if (m.x < cameraX - 250) {
       removeEntityDOM('mob_' + m.id);
       monsters.splice(i, 1);
@@ -626,7 +618,6 @@ function updateBossBombs(dt) {
       b.timer -= dt;
       if (b.timer <= 0) {
         b.state = 'exploding';
-        triggerScreenShake(0.1, 4);
       }
     } else if (b.state === 'exploding') {
       b.explodeTimer -= dt;
@@ -658,7 +649,6 @@ function updateBosses(dt) {
 
     if (d.patternTimer > 3.0) {
       d.patternTimer = 0;
-      // [도미노 융단폭격] 1층 또는 2층 랜덤 선택 후 순차 폭발
       let targetFloorY = Math.random() < 0.5 ? FLOOR_1_Y : FLOOR_2_Y;
       let startX = d.x - 100;
       for (let k = 0; k < 4; k++) {
@@ -682,10 +672,8 @@ function updateBosses(dt) {
     if (m.patternTimer > cd) {
       m.patternTimer = 0;
       if (Math.random() < 0.5) {
-        // [단일 정밀타격] 플레이어 발밑 조준
         spawnBossBomb(player.x, player.y, 'effect_darkorb', '🟣', 0.5);
       } else {
-        // [직선 궤적 저격] 마왕 -> 플레이어 방향 3연쇄 폭발
         let pX = player.x;
         let pY = player.y;
         for (let k = 0; k < 3; k++) {
@@ -708,7 +696,6 @@ function calcDamage() {
   let finalDmg = player.atkPower * (isCrit ? 2.0 : 1.0);
   if (isCrit) {
     stats.critHits++;
-    triggerScreenShake(0.1, 5);
   }
   return { dmg: finalDmg, isCrit };
 }
@@ -866,7 +853,6 @@ function damageBoss(b, dmg, hitX, hitY, isCrit) {
     addScore(b.points);
     spawnFloatingText(b.x + b.width/2, b.y, `+${b.points}`);
     createShockwave(b.x + b.width/2, b.y + b.height/2, 120, '#ef4444');
-    triggerScreenShake(0.3, 8);
     removeEntityDOM('boss_' + b.type);
 
     if (b.type === 'dragon') {
@@ -886,14 +872,12 @@ function hitPlayer() {
     player.invincibleTimer = 1.0;
     createShockwave(player.x + player.width/2, player.y + player.height/2, 60, '#38bdf8');
     createSparks(player.x + 32, player.y + 32, '#38bdf8', 10);
-    triggerScreenShake(0.15, 6);
     return;
   }
 
   player.hearts -= 1;
   player.invincibleTimer = 1.0;
   createSparks(player.x + 32, player.y + 32, '#ef4444', 8);
-  triggerScreenShake(0.15, 6);
 
   if (player.hearts <= 0) {
     player.hearts = 0;
@@ -972,9 +956,7 @@ window.submitInitialScore = submitInitialScore;
 
 // --- 11. 시각 효과 및 판정 헬퍼 ---
 function triggerScreenShake(time, mag) {
-  // 화면 흔들림 완전 제거
-  screenShakeTimer = 0;
-  screenShakeMag = 0;
+  // 화면 흔들림 완전 비활성화
 }
 
 function spawnFloatingText(x, y, text) {
@@ -1056,22 +1038,13 @@ function createLightningBolt(targetX) {
   });
 }
 
-// --- 12. 캔버스 렌더링 루프 및 네이티브 GIF 동기화 ---
+// --- 12. 캔버스 렌더링 루프 및 배경 그라데이션 ---
 function render() {
   ctx.save();
-
-  if (screenShakeTimer > 0) {
-    let ox = (Math.random() - 0.5) * screenShakeMag * 2;
-    let oy = (Math.random() - 0.5) * screenShakeMag * 2;
-    ctx.translate(ox, oy);
-  }
-
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  // 1. [테마별 배경 & 전환 그라데이션 연출]
+  // 1. 3단계 거리별 배경 및 바닥 테마 그라데이션 블렌딩
   let curDist = player ? player.x / SCALE_X : 0;
-
-  // 거리 기반 테마 블렌딩 비율 계산 (550~650m, 1350~1450m 전환 구간)
   let w1 = 0, w2 = 0, w3 = 0;
   if (curDist < 550) {
     w1 = 1;
@@ -1087,7 +1060,7 @@ function render() {
     w3 = 1;
   }
 
-  // (1) 1구간 : 여명의 초원 (0 ~ 600m)
+  // (1) 여명의 초원 (0 ~ 600m)
   if (w1 > 0) {
     ctx.save();
     ctx.globalAlpha = w1;
@@ -1098,7 +1071,6 @@ function render() {
     ctx.fillStyle = skyGrd;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // 원경 산맥 실루엣 (느린 패럴랙스)
     ctx.fillStyle = '#166534';
     ctx.beginPath();
     ctx.moveTo(0, FLOOR_1_Y);
@@ -1111,7 +1083,7 @@ function render() {
     ctx.restore();
   }
 
-  // (2) 2구간 : 화염 협곡 (600 ~ 1400m)
+  // (2) 화염 협곡 (600 ~ 1400m)
   if (w2 > 0) {
     ctx.save();
     ctx.globalAlpha = w2;
@@ -1122,7 +1094,6 @@ function render() {
     ctx.fillStyle = skyGrd;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // 뾰족한 바위산 실루엣
     ctx.fillStyle = '#431407';
     ctx.beginPath();
     ctx.moveTo(0, FLOOR_1_Y);
@@ -1135,7 +1106,7 @@ function render() {
     ctx.restore();
   }
 
-  // (3) 3구간 : 심연의 마왕성 (1400m 이상)
+  // (3) 심연의 마왕성 (1400m 이상)
   if (w3 > 0) {
     ctx.save();
     ctx.globalAlpha = w3;
@@ -1146,13 +1117,11 @@ function render() {
     ctx.fillStyle = skyGrd;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // 붉은 보름달
     ctx.fillStyle = 'rgba(239, 68, 68, 0.4)';
     ctx.beginPath();
     ctx.arc(canvas.width - 150, 100, 45, 0, Math.PI * 2);
     ctx.fill();
 
-    // 고딕 성채 기둥 실루엣
     ctx.fillStyle = '#1e0b36';
     for (let x = -50; x < canvas.width + 100; x += 140) {
       let colX = x - (Math.floor(cameraX * 0.15) % 140);
@@ -1161,23 +1130,23 @@ function render() {
     ctx.restore();
   }
 
-  // 지형 바닥 및 2층 발판 (테마별 색상 블렌딩)
+  // 지형 바닥 및 발판 렌더링
   let pCol = w3 > 0.5 ? '#701a75' : (w2 > 0.5 ? '#78350f' : '#65a30d');
   let gCol = w3 > 0.5 ? '#3b0764' : (w2 > 0.5 ? '#b45309' : '#22c55e');
 
-  // 2층 발판 (상단)
+  // 2층 발판
   ctx.fillStyle = pCol;
   ctx.fillRect(0, FLOOR_2_Y, canvas.width, 10);
   ctx.fillStyle = 'rgba(255,255,255,0.2)';
   ctx.fillRect(0, FLOOR_2_Y, canvas.width, 3);
 
-  // 1층 바닥 (하단)
+  // 1층 바닥
   ctx.fillStyle = '#1e293b';
   ctx.fillRect(0, FLOOR_1_Y, canvas.width, canvas.height - FLOOR_1_Y);
   ctx.fillStyle = gCol;
   ctx.fillRect(0, FLOOR_1_Y, canvas.width, 6);
 
-  // [보스전 진입 알림 표지판 렌더링 (570m, 1,370m 지점)]
+  // [보스전 진입 알림 표지판 (570m, 1370m)]
   const signposts = [
     { dist: 570, title: '⚠️ BOSS AHEAD', desc: '중간보스 : 드래곤' },
     { dist: 1370, title: '☠️ FINAL BOSS', desc: '최종보스 : 마왕' }
@@ -1185,18 +1154,15 @@ function render() {
   signposts.forEach(sp => {
     let sx = (sp.dist * SCALE_X) - cameraX;
     if (sx >= -100 && sx <= canvas.width + 100) {
-      // 표지판 나무 기둥
       ctx.fillStyle = '#78350f';
       ctx.fillRect(sx + 36, FLOOR_1_Y - 95, 8, 95);
-      
-      // 표지판 팻말 패널
+
       ctx.fillStyle = '#1c1917';
       ctx.fillRect(sx - 15, FLOOR_1_Y - 120, 110, 45);
       ctx.strokeStyle = '#f59e0b';
       ctx.lineWidth = 2;
       ctx.strokeRect(sx - 15, FLOOR_1_Y - 120, 110, 45);
 
-      // 표지판 경고 텍스트
       ctx.fillStyle = '#ef4444';
       ctx.font = 'bold 12px "NeoDunggeunGothicPro"';
       ctx.textAlign = 'center';
@@ -1229,11 +1195,9 @@ function render() {
       ctx.arc(bx + 32, b.y + 32, 34, 0, Math.PI * 2);
       ctx.fill();
 
-      // 폭탄 네이티브 실시간 GIF DOM 동기화
       let bombSrc = b.assetKey === 'effect_fireball' ? 'assets/effects/fire_ball.gif' : 'assets/effects/dark_orb.gif';
       syncEntityDOM('bomb_' + b.id, bombSrc, bx, b.y, b.width, b.height, 1, false, true);
 
-      // 이미지 부재 시 캔버스 이모티콘 Fallback
       if (!ASSETS.images[b.assetKey]) {
         ctx.font = '40px "NeoDunggeunGothicPro", sans-serif';
         ctx.textAlign = 'center';
@@ -1244,15 +1208,13 @@ function render() {
     }
   });
 
-  // 3. 몬스터 렌더링 & [실시간 움직이는 GIF DOM 동기화]
+  // 3. 몬스터 렌더링 & [머리 위 숫자 체력 확대(18px) + 검은 외곽선]
   monsters.forEach(m => {
     let sx = m.x - cameraX;
     let isVisible = (sx >= -80 && sx <= 950);
 
-    // 네이티브 GIF DOM 엔진 동기화 (원본 좌측 시선 유지)
     syncEntityDOM('mob_' + m.id, `assets/monsters/${m.type}.gif`, sx, m.y, m.width, m.height, 1, m.hitFlash > 0, isVisible);
 
-    // 이미지 부재 시 캔버스 백업 이모티콘
     if (!ASSETS.images[m.assetKey]) {
       ctx.save();
       if (m.hitFlash > 0) ctx.filter = 'brightness(3)';
@@ -1263,7 +1225,7 @@ function render() {
       ctx.restore();
     }
 
-    // 머리 위 정수 숫자 체력 표기 (18px 확대 및 배경 대비 검은 외곽선 추가)
+    // 머리 위 18px 굵은 글씨 + 검은 외곽선 체력 표기
     ctx.font = 'bold 18px "NeoDunggeunGothicPro"';
     ctx.textAlign = 'center';
     ctx.strokeStyle = '#000000';
@@ -1271,32 +1233,31 @@ function render() {
     ctx.strokeText(`HP ${m.hp}`, sx + m.width / 2, m.y - 10);
     ctx.fillStyle = '#ff4444';
     ctx.fillText(`HP ${m.hp}`, sx + m.width / 2, m.y - 10);
+  });
 
-  // 4. 보스 렌더링 & [실시간 대형 GIF DOM 동기화]
+  // 4. 보스 렌더링 (192x192 2배 크기) & Y=74 체력바
   [bosses.dragon, bosses.demon].forEach(b => {
     if (b && b.active) {
       let bx = b.x - cameraX;
 
-      // 보스 96x96 네이티브 GIF DOM 동기화 (원본 좌측 시선 유지)
       syncEntityDOM('boss_' + b.type, `assets/monsters/${b.type === 'dragon' ? 'dragon' : 'demon'}.gif`, bx, b.y, b.width, b.height, 1, b.hitFlash > 0, true);
 
-      // 이미지 부재 시 백업 이모티콘
       if (!ASSETS.images[b.assetKey]) {
         ctx.save();
         if (b.hitFlash > 0) ctx.filter = 'brightness(3)';
-        ctx.font = '76px "NeoDunggeunGothicPro", sans-serif';
+        ctx.font = '96px "NeoDunggeunGothicPro", sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'bottom';
         ctx.fillText(b.emoji, bx + b.width / 2, b.y + b.height);
         ctx.restore();
       }
 
-      // 상단 HUD와 겹치지 않도록 Y=74 위치로 이동 + 배경 박스 추가
+      // 상단 HUD와 겹치지 않는 Y=74 보스 체력바
       let barX = canvas.width / 2 - 160;
       let barY = 74;
 
       ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-      ctx.fillRect(barX - 10, barY - 18, 340, 42); // 가독성용 암실 패널
+      ctx.fillRect(barX - 10, barY - 18, 340, 42);
 
       ctx.fillStyle = '#111';
       ctx.fillRect(barX, barY, 320, 16);
@@ -1304,7 +1265,7 @@ function render() {
       ctx.fillRect(barX, barY, 320 * (b.hp / b.maxHp), 16);
       ctx.strokeStyle = '#fff';
       ctx.strokeRect(barX, barY, 320, 16);
-      
+
       ctx.fillStyle = '#ffcc00';
       ctx.font = '14px "NeoDunggeunGothicPro"';
       ctx.textAlign = 'center';
@@ -1342,12 +1303,11 @@ function render() {
     }
   });
 
-  // 6. 플레이어 렌더링 & [실시간 네이티브 GIF 동기화]
-  if (player && (player.invincibleTimer <= 0 || Math.floor(Date.now() / 80) % 2 === 0)) {
+  // 6. 플레이어 렌더링 (무적 시 반투명 0.45 적용)
+  if (player) {
     let px = player.x - cameraX;
     ctx.save();
 
-    // 보호막 버블
     if (player.shield > 0) {
       ctx.strokeStyle = '#38bdf8';
       ctx.lineWidth = 3;
@@ -1358,11 +1318,9 @@ function render() {
       ctx.fill();
     }
 
-    // 플레이어 실시간 GIF 동기화 (무적 시간에는 사라지지 않고 45% 반투명 유지)
     let heroOpacity = player.invincibleTimer > 0 ? 0.45 : 1.0;
     syncEntityDOM('player_sprite', `assets/heroes/${selectedChar}.gif`, px, player.y, player.width, player.height, player.facing, false, true, heroOpacity);
 
-    // 이미지 부재 시 대체 이모티콘
     if (!ASSETS.images['hero_' + selectedChar]) {
       let heroEmoji = selectedChar === 'warrior' ? '🥷' : (selectedChar === 'mage' ? '🧙' : '🧝');
       ctx.font = '48px "NeoDunggeunGothicPro", sans-serif';
@@ -1370,6 +1328,7 @@ function render() {
       ctx.textBaseline = 'bottom';
       ctx.translate(px + player.width / 2, player.y + player.height + 4);
       if (player.facing === -1) ctx.scale(-1, 1);
+      ctx.globalAlpha = heroOpacity;
       ctx.fillText(heroEmoji, 0, 0);
     }
     ctx.restore();
@@ -1433,7 +1392,7 @@ function render() {
     ctx.restore();
   });
 
-  // 8. 노란색 플로팅 스코어 텍스트 (+10, +20, +500)
+  // 8. 노란색 플로팅 스코어 (+10, +20, +500)
   floatingTexts.forEach(ft => {
     ctx.save();
     ctx.globalAlpha = Math.max(0, ft.alpha);
@@ -1443,7 +1402,7 @@ function render() {
     ctx.restore();
   });
 
-  // 9. 상단 통합 HUD
+  // 9. 상단 통합 HUD & 버프 인벤토리
   if (gameState === 'PLAYING' || gameState === 'UPGRADE' || gameState === 'READY') {
     let heartStr = '';
     for (let i = 0; i < player.maxHearts; i++) {
@@ -1468,7 +1427,7 @@ function render() {
     ctx.textAlign = 'right';
     ctx.fillText(`⏳ ${Math.ceil(timeLeft)}초`, canvas.width - 20, 30);
 
-    // 2열: 획득 버프 인벤토리 트레이 (업로드한 PNG 아이콘 우선 출력)
+    // 2열 버프 트레이 (PNG 아이콘 우선)
     let trayX = 20;
     for (let buffId in player.buffCounts) {
       let count = player.buffCounts[buffId];
@@ -1561,7 +1520,7 @@ function syncEntityDOM(id, src, x, y, w, h, facing = 1, flash = false, visible =
   el.style.height = (h / 500 * 100) + '%';
   el.style.transform = facing === -1 ? 'scaleX(-1)' : 'scaleX(1)';
   el.style.filter = flash ? 'brightness(3)' : 'none';
-  el.style.opacity = opacity; // 반투명 적용
+  el.style.opacity = opacity;
 }
 
 function removeEntityDOM(id) {
