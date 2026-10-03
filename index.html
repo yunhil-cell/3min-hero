@@ -34,10 +34,22 @@
     <h2 class="pixel-text">용사 및 난이도 선택</h2>
     
     <div class="select-label">용사 선택</div>
-    <div class="select-group">
-      <button class="choice-btn" onclick="selectChar('warrior', this)">🥷 전사 (하트 5)</button>
-      <button class="choice-btn" onclick="selectChar('mage', this)">🧙 마법사 (하트 3)</button>
-      <button class="choice-btn" onclick="selectChar('archer', this)">🧝 궁수 (하트 3)</button>
+    <div class="select-group char-select-group">
+      <button class="choice-btn char-card" onclick="selectChar('warrior', this)">
+        <img src="assets/heroes/warrior.gif" alt="전사" class="char-preview">
+        <div class="char-name">전사</div>
+        <div class="char-sub">❤️ × 5</div>
+      </button>
+      <button class="choice-btn char-card" onclick="selectChar('mage', this)">
+        <img src="assets/heroes/mage.gif" alt="마법사" class="char-preview">
+        <div class="char-name">마법사</div>
+        <div class="char-sub">❤️ × 3</div>
+      </button>
+      <button class="choice-btn char-card" onclick="selectChar('archer', this)">
+        <img src="assets/heroes/archer.gif" alt="궁수" class="char-preview">
+        <div class="char-name">궁수</div>
+        <div class="char-sub">❤️ × 3</div>
+      </button>
     </div>
 
     <div class="select-label">난이도 선택</div>
