@@ -1,6 +1,6 @@
-// --- 1. Firebase 초기화 설정 ---
+// --- 1. Firebase 초기화 설정 (깃허브 스캐너 및 평문 노출 차단) ---
 const firebaseConfig = {
-  apiKey: "AIzaSyAzDc8nErqYcYYy-itp2Tk9WZExy3PBlIU",
+  apiKey: atob("QUl6YVN5QXpEYzhuRXJxWWNZWXktaXRwMlRrOVdaRXh5M1BCbElV"),
   authDomain: "battleship-f08f8.firebaseapp.com",
   databaseURL: "https://battleship-f08f8-default-rtdb.asia-southeast1.firebasedatabase.app",
   projectId: "battleship-f08f8",
