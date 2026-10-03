@@ -1,19 +1,14 @@
 // =============================================================================
-// [도전! 3분 용사] 게임 엔진 (game.js)
+// [도전! 3분 용사] 최종 통합 게임 엔진 (game.js)
 // =============================================================================
 
-// --- 1. 에셋 로더 (DOM 등록을 통한 GIF 실시간 애니메이션 강제 활성화) ---
+// --- 1. 에셋 로더 (이미지 부재 시 이모티콘 Fallback 자동 적용) ---
 const ASSETS = {
   images: {},
   load(key, src) {
     const img = new Image();
     img.src = src;
-    img.onload = () => { 
-      ASSETS.images[key] = img; 
-      // DOM에 실제로 등록하여 브라우저가 GIF 프레임을 계속 갱신하도록 강제
-      const preloader = document.getElementById('gif-preloader');
-      if (preloader) preloader.appendChild(img);
-    };
+    img.onload = () => { ASSETS.images[key] = img; };
     img.onerror = () => { ASSETS.images[key] = null; };
   }
 };
@@ -60,6 +55,10 @@ let lastDistanceSpawn = 0;
 let screenShakeTimer = 0;
 let screenShakeMag = 0;
 
+// 엔티티 고유 ID 생성 카운터
+let mobUid = 0;
+let bombUid = 0;
+
 // 전투 통계 리포트 데이터
 let stats = {
   ghostKills: 0,
@@ -80,7 +79,7 @@ let monsters = [];
 let projectiles = [];
 let particles = [];
 let floatingTexts = [];
-let bossBombs = []; // 스타 폭탄피하기 장판
+let bossBombs = [];
 let bosses = { dragon: null, demon: null };
 
 // 9종 로그라이크 버프 명세
@@ -101,14 +100,17 @@ function showSelectScreen() {
   document.getElementById('screen-title').style.display = 'none';
   document.getElementById('screen-select').style.display = 'flex';
 }
+window.showSelectScreen = showSelectScreen;
 
 function backToTitle() {
+  clearAllEntityDOM();
   document.getElementById('screen-select').style.display = 'none';
   document.getElementById('modal-result').style.display = 'none';
   document.getElementById('modal-records').style.display = 'none';
   document.getElementById('screen-title').style.display = 'flex';
   gameState = 'TITLE';
 }
+window.backToTitle = backToTitle;
 
 function selectChar(type, btn) {
   selectedChar = type;
@@ -116,6 +118,7 @@ function selectChar(type, btn) {
   btn.classList.add('active');
   checkDepartable();
 }
+window.selectChar = selectChar;
 
 function selectDiff(type, btn) {
   selectedDiff = type;
@@ -123,6 +126,7 @@ function selectDiff(type, btn) {
   btn.classList.add('active');
   checkDepartable();
 }
+window.selectDiff = selectDiff;
 
 function checkDepartable() {
   if (selectedChar && selectedDiff) {
@@ -133,20 +137,27 @@ function checkDepartable() {
 function showRules() {
   document.getElementById('modal-rules').style.display = 'flex';
 }
+window.showRules = showRules;
+
 function closeRules() {
   document.getElementById('modal-rules').style.display = 'none';
 }
+window.closeRules = closeRules;
 
 function openLeaderboard() {
   document.getElementById('modal-records').style.display = 'flex';
   if (window.loadLeaderboard) window.loadLeaderboard();
 }
+window.openLeaderboard = openLeaderboard;
+
 function closeLeaderboard() {
   document.getElementById('modal-records').style.display = 'none';
 }
+window.closeLeaderboard = closeLeaderboard;
 
 // --- 4. 게임 시작 및 초기화 ---
 function startGame() {
+  clearAllEntityDOM();
   document.getElementById('screen-select').style.display = 'none';
 
   let baseHearts = selectedChar === 'warrior' ? 5 : 3;
@@ -195,7 +206,7 @@ function startGame() {
   pendingUpgrades = 0;
   lastDistanceSpawn = 0;
   cameraX = 0;
-  readyTimer = 1.2; // READY... GO! 연출 시간
+  readyTimer = 1.2;
   warningTimer = 0;
 
   stats = {
@@ -216,6 +227,7 @@ function startGame() {
   lastTime = performance.now();
   requestAnimationFrame(gameLoop);
 }
+window.startGame = startGame;
 
 // --- 5. 100점 달성 로그라이크 카드 업그레이드 ---
 function triggerUpgrade() {
@@ -305,7 +317,9 @@ function spawnMonsterAtX(targetX, force2F = false) {
   const groundY = is2F ? FLOOR_2_Y : FLOOR_1_Y;
   const spawnY = groundY - 64;
 
+  mobUid++;
   monsters.push({
+    id: mobUid,
     type,
     emoji,
     assetKey: 'mob_' + type,
@@ -346,7 +360,7 @@ function checkBossSpawn() {
       active: true,
       hitFlash: 0
     };
-    warningTimer = 2.0; // WARNING 텍스트 점멸
+    warningTimer = 2.0;
   }
 
   // 마왕 (1,400m = 14,000px)
@@ -402,16 +416,15 @@ function update(dt) {
 
   let dt60 = dt * 60;
 
-  // 1. 플레이어 이동 및 달리기 관성
+  // 플레이어 이동 및 달리기 관성
   if (keys.left) { player.vx = -player.speed; player.facing = -1; }
   else if (keys.right) { player.vx = player.speed; player.facing = 1; }
   else { player.vx = 0; }
 
-  // 속도 통계 갱신
   let curSpeedMps = player.speed * 3.0;
   if (curSpeedMps > stats.maxSpeed) stats.maxSpeed = curSpeedMps;
 
-  // 중력 및 위치 이동
+  // 중력 및 위치 계산
   player.vy += 0.85 * dt60;
   player.x += player.vx * dt60;
   player.y += player.vy * dt60;
@@ -436,7 +449,7 @@ function update(dt) {
     player.isGrounded = true;
   }
 
-  // 타이머 감소
+  // 타이머 갱신
   if (player.invincibleTimer > 0) player.invincibleTimer -= dt;
   if (player.skillTimer > 0) player.skillTimer -= dt;
   if (player.normalAtkTimer > 0) player.normalAtkTimer -= dt;
@@ -444,7 +457,7 @@ function update(dt) {
   if (screenShakeTimer > 0) screenShakeTimer -= dt;
   if (warningTimer > 0) warningTimer -= dt;
 
-  // 2. 카메라 제어 (보스 조우 시 화면 잠금)
+  // 카메라 제어 (보스 조우 시 화면 잠금)
   let lockCamera = false;
   if (bosses.dragon && bosses.dragon.active) lockCamera = true;
   if (bosses.demon && bosses.demon.active) lockCamera = true;
@@ -458,7 +471,7 @@ function update(dt) {
     cameraX = Math.max(0, player.x - 200);
   }
 
-  // 3. 거리 스폰 체크
+  // 거리 스폰
   checkBossSpawn();
   let spawnInterval = getDiffSpawnDistance();
   if (player.x - lastDistanceSpawn >= spawnInterval && player.x < 1350 * SCALE_X) {
@@ -466,7 +479,7 @@ function update(dt) {
     lastDistanceSpawn = player.x;
   }
 
-  // 4. 플레이어/적 투사체 이동 및 충돌
+  // 투사체 처리
   for (let i = projectiles.length - 1; i >= 0; i--) {
     let p = projectiles[i];
     p.x += p.vx * dt;
@@ -498,7 +511,7 @@ function update(dt) {
     if (p.life <= 0) projectiles.splice(i, 1);
   }
 
-  // 5. 몬스터 액션 및 물리
+  // 몬스터 AI
   for (let i = monsters.length - 1; i >= 0; i--) {
     let m = monsters[i];
     let speedMult = selectedDiff === 'hard' ? 1.15 : 1.0;
@@ -533,20 +546,24 @@ function update(dt) {
         projectiles.push({
           x: m.x, y: m.y + 15, width: 16, height: 16,
           vx: Math.cos(angle) * 230, vy: Math.sin(angle) * 230,
-          life: 3, isPlayer: false, isEmoji: true, emojiText: '🦴'
+          life: 3, isPlayer: false, isEmoji: true, emojiText: '🦴', isCustomBox: true
         });
       }
     }
 
     if (checkRectCollide(player, m)) hitPlayer();
-    if (m.x < cameraX - 250) monsters.splice(i, 1);
+
+    // 화면 뒤로 지나간 몬스터 제거 및 DOM 잔상 정리
+    if (m.x < cameraX - 250) {
+      removeEntityDOM('mob_' + m.id);
+      monsters.splice(i, 1);
+    }
   }
 
-  // 6. 보스 패턴 및 스타 폭탄피하기 장판 처리
   updateBosses(dt);
   updateBossBombs(dt);
 
-  // 7. 파티클 및 플로팅 스코어 갱신
+  // 파티클 & 플로팅 스코어
   for (let i = particles.length - 1; i >= 0; i--) {
     let pt = particles[i];
     pt.alpha -= dt * (pt.decay || 2.5);
@@ -564,28 +581,16 @@ function update(dt) {
   }
 }
 
-// --- 8. 스타 유즈맵식 보스 폭탄피하기 시스템 (GIF 첫 프레임 재생 보장 및 DOM 마운트) ---
+// --- 8. 스타 유즈맵식 보스 폭탄피하기 시스템 ---
 function spawnBossBomb(x, y, assetKey, emoji, warningSec = 0.6) {
-  let bombImg = null;
-  const preloader = document.getElementById('gif-preloader');
-  
-  if (assetKey === 'effect_fireball') {
-    bombImg = new Image();
-    bombImg.src = 'assets/effects/fire_ball.gif?t=' + Date.now() + Math.random();
-    if (preloader) preloader.appendChild(bombImg);
-  } else if (assetKey === 'effect_darkorb') {
-    bombImg = new Image();
-    bombImg.src = 'assets/effects/dark_orb.gif?t=' + Date.now() + Math.random();
-    if (preloader) preloader.appendChild(bombImg);
-  }
-
+  bombUid++;
   bossBombs.push({
+    id: bombUid,
     x: x,
     y: y,
     width: 64,
     height: 64,
     assetKey: assetKey,
-    imgInstance: bombImg,
     emoji: emoji,
     state: 'warning',
     timer: warningSec,
@@ -601,11 +606,10 @@ function updateBossBombs(dt) {
       b.timer -= dt;
       if (b.timer <= 0) {
         b.state = 'exploding';
-        triggerScreenShake(0.1, 4); // 폭발 시 화면 흔들림
+        triggerScreenShake(0.1, 4);
       }
     } else if (b.state === 'exploding') {
       b.explodeTimer -= dt;
-      // 피격 판정 (지름 64px 원형)
       if (!b.hitDone) {
         let centerBx = b.x + 32;
         let centerBy = b.y + 32;
@@ -618,6 +622,7 @@ function updateBossBombs(dt) {
         }
       }
       if (b.explodeTimer <= 0) {
+        removeEntityDOM('bomb_' + b.id);
         bossBombs.splice(i, 1);
       }
     }
@@ -633,7 +638,7 @@ function updateBosses(dt) {
 
     if (d.patternTimer > 3.0) {
       d.patternTimer = 0;
-      // [도미노 융단폭격] 1층 또는 2층 중 랜덤 선택 후 순차 폭발
+      // [도미노 융단폭격] 1층 또는 2층 랜덤 선택 후 순차 폭발
       let targetFloorY = Math.random() < 0.5 ? FLOOR_1_Y : FLOOR_2_Y;
       let startX = d.x - 100;
       for (let k = 0; k < 4; k++) {
@@ -641,7 +646,7 @@ function updateBosses(dt) {
         let bombY = targetFloorY - 64;
         setTimeout(() => {
           if (gameState === 'PLAYING') spawnBossBomb(bombX, bombY, 'effect_fireball', '🔥', 0.6);
-        }, k * 150); // 0.15초 도미노 간격
+        }, k * 150);
       }
     }
     if (checkRectCollide(player, d)) hitPlayer();
@@ -660,7 +665,7 @@ function updateBosses(dt) {
         // [단일 정밀타격] 플레이어 발밑 조준
         spawnBossBomb(player.x, player.y, 'effect_darkorb', '🟣', 0.5);
       } else {
-        // [직선 궤적 저격] 마왕 -> 플레이어 방향 3연속 연쇄 폭발
+        // [직선 궤적 저격] 마왕 -> 플레이어 방향 3연쇄 폭발
         let pX = player.x;
         let pY = player.y;
         for (let k = 0; k < 3; k++) {
@@ -683,7 +688,7 @@ function calcDamage() {
   let finalDmg = player.atkPower * (isCrit ? 2.0 : 1.0);
   if (isCrit) {
     stats.critHits++;
-    triggerScreenShake(0.1, 5); // 치명타 적중 시 화면 흔들림
+    triggerScreenShake(0.1, 5);
   }
   return { dmg: finalDmg, isCrit };
 }
@@ -702,7 +707,7 @@ function doNormalAttack() {
       y: player.y - 15,
       width: reach,
       height: player.height + 30,
-      isCustomBox: true // 공격 판정 범위 보존
+      isCustomBox: true
     };
 
     particles.push({
@@ -730,7 +735,7 @@ function doNormalAttack() {
         y: player.y + 20 + (i * 8),
         width: 20, height: 20,
         vx: player.facing * 400, vy: 0,
-        life: 1.5, isPlayer: true, isExplosive: true, isEmoji: true, emojiText: '⚡', dmg: attackData.dmg, isCrit: attackData.isCrit
+        life: 1.5, isPlayer: true, isExplosive: true, isEmoji: true, emojiText: '⚡', dmg: attackData.dmg, isCrit: attackData.isCrit, isCustomBox: true
       });
     }
   } 
@@ -741,7 +746,7 @@ function doNormalAttack() {
         y: player.y + 26 + (i * 6),
         width: 24, height: 8,
         vx: player.facing * 620, vy: (Math.random() - 0.5) * 20,
-        life: 1.5, isPlayer: true, dmg: attackData.dmg, isCrit: attackData.isCrit, color: attackData.isCrit ? '#facc15' : '#e2e8f0'
+        life: 1.5, isPlayer: true, dmg: attackData.dmg, isCrit: attackData.isCrit, color: attackData.isCrit ? '#facc15' : '#e2e8f0', isCustomBox: true
       });
     }
   }
@@ -757,7 +762,8 @@ function doSkill() {
   if (selectedChar === 'warrior') {
     let spinBox = {
       x: player.x - 60, y: player.y - 40,
-      width: player.width + 120, height: player.height + 80
+      width: player.width + 120, height: player.height + 80,
+      isCustomBox: true
     };
 
     particles.push({
@@ -781,7 +787,7 @@ function doSkill() {
   } 
   else if (selectedChar === 'mage') {
     let lX = player.facing === 1 ? player.x + 40 : player.x - 340;
-    let lightningArea = { x: lX, y: 0, width: 340, height: 500 };
+    let lightningArea = { x: lX, y: 0, width: 340, height: 500, isCustomBox: true };
 
     for (let k = 0; k < 4; k++) {
       createLightningBolt(lX + 40 + (k * 70));
@@ -803,7 +809,7 @@ function doSkill() {
           y: player.y + 26,
           width: 26, height: 8,
           vx: player.facing * 660, vy: (i - 2) * 25,
-          life: 1.5, isPlayer: true, dmg: attackData.dmg + 10, isCrit: attackData.isCrit, color: '#fb923c'
+          life: 1.5, isPlayer: true, dmg: attackData.dmg + 10, isCrit: attackData.isCrit, color: '#fb923c', isCustomBox: true
         });
       }, i * 45);
     }
@@ -823,6 +829,7 @@ function damageMonster(m, dmg, hitX, hitY, isCrit) {
     addScore(m.points);
     spawnFloatingText(m.x + m.width/2, m.y, `+${m.points}`);
     createSparks(m.x + m.width/2, m.y + m.height/2, '#f87171', 10);
+    removeEntityDOM('mob_' + m.id);
     let idx = monsters.indexOf(m);
     if (idx > -1) monsters.splice(idx, 1);
   }
@@ -840,12 +847,13 @@ function damageBoss(b, dmg, hitX, hitY, isCrit) {
     spawnFloatingText(b.x + b.width/2, b.y, `+${b.points}`);
     createShockwave(b.x + b.width/2, b.y + b.height/2, 120, '#ef4444');
     triggerScreenShake(0.3, 8);
+    removeEntityDOM('boss_' + b.type);
 
     if (b.type === 'dragon') {
       pendingUpgrades += 2;
       triggerUpgrade();
     } else if (b.type === 'demon') {
-      endGame(true); // 마왕 토벌 성공
+      endGame(true);
     }
   }
 }
@@ -855,7 +863,7 @@ function hitPlayer() {
 
   if (player.shield > 0) {
     player.shield = 0;
-    player.invincibleTimer = 1.0; // 보호막 깨질 때도 1초 무적
+    player.invincibleTimer = 1.0;
     createShockwave(player.x + player.width/2, player.y + player.height/2, 60, '#38bdf8');
     createSparks(player.x + 32, player.y + 32, '#38bdf8', 10);
     triggerScreenShake(0.15, 6);
@@ -889,6 +897,7 @@ let finalCalculatedScore = 0;
 
 async function endGame(clear) {
   gameState = 'RESULT';
+  clearAllEntityDOM();
   finalCalculatedScore = score;
   let timeBonus = 0;
   if (clear) {
@@ -906,7 +915,6 @@ async function endGame(clear) {
   document.getElementById('res-score').innerText = finalCalculatedScore.toLocaleString();
   document.getElementById('res-rank').innerText = rank;
 
-  // 전투 리포트 HTML 작성
   let totalKills = stats.ghostKills + stats.zombieKills + stats.skeletonKills + stats.bossKills;
   document.getElementById('report-content').innerHTML = `
     • 잔여 시간 보너스 : ${Math.floor(timeLeft)}초 (+${timeBonus} P)<br>
@@ -916,7 +924,6 @@ async function endGame(clear) {
     • 치명타 적중 횟수 : 총 ${stats.critHits}회
   `;
 
-  // Firebase 실시간 TOP 3 자격 검증
   const isEligible = await window.checkTop3Eligibility(selectedDiff, finalCalculatedScore);
   const entryBox = document.getElementById('initials-entry-box');
   if (isEligible) {
@@ -939,11 +946,11 @@ async function submitInitialScore() {
 
   await window.saveScoreToFirebase(selectedDiff, initials, finalCalculatedScore, selectedChar);
   document.getElementById('initials-entry-box').style.display = 'none';
-  openLeaderboard(); // 바로 명예의 전당 열어서 확인
+  openLeaderboard();
 }
 window.submitInitialScore = submitInitialScore;
 
-// --- 11. 시각 효과 헬퍼 (레트로 셰이크/텍스트/파티클) ---
+// --- 11. 시각 효과 및 판정 헬퍼 ---
 function triggerScreenShake(time, mag) {
   screenShakeTimer = time;
   screenShakeMag = mag;
@@ -953,14 +960,13 @@ function spawnFloatingText(x, y, text) {
   floatingTexts.push({ x, y, text, alpha: 1.0 });
 }
 
-// [정밀 히트박스] 투명한 여백을 깎아내고 실제 눈에 보이는 캐릭터 몸통만 판정
+// [정밀 히트박스] 외곽 투명 여백을 깎아내고 실제 눈에 보이는 캐릭터 몸통만 정밀 판정
 function getHitbox(e) {
-  if (e.isCustomBox) return e; // 칼날 검기나 번개 공격 범위는 원본 크기 유지
+  if (e.isCustomBox) return e;
 
-  // 캐릭터/몬스터의 투명 여백(약 22%)을 제외한 실제 몸체 영역만 계산
-  let padX = e.width * 0.22;
-  let padTop = e.height * 0.15;
-  let padBottom = e.height * 0.05;
+  let padX = e.width * 0.22;       // 좌우 22% 투명 여백 제외
+  let padTop = e.height * 0.15;    // 상단 15% 머리 위 여백 제외
+  let padBottom = e.height * 0.05; // 발바닥 5% 여백 제외
 
   return {
     x: e.x + padX,
@@ -1029,11 +1035,10 @@ function createLightningBolt(targetX) {
   });
 }
 
-// --- 12. 캔버스 렌더링 루프 ---
+// --- 12. 캔버스 렌더링 루프 및 네이티브 GIF 동기화 ---
 function render() {
   ctx.save();
 
-  // 화면 흔들림(Screen Shake) 오프셋
   if (screenShakeTimer > 0) {
     let ox = (Math.random() - 0.5) * screenShakeMag * 2;
     let oy = (Math.random() - 0.5) * screenShakeMag * 2;
@@ -1045,20 +1050,19 @@ function render() {
   // 1. 3단계 거리별 배경 및 바닥 색상
   let curDist = player ? player.x / SCALE_X : 0;
   let skyColor = '#111827';
-  let groundColor = '#22c55e'; // 1구간: 평원 초록
+  let groundColor = '#22c55e';
 
   if (curDist >= 1400) {
-    skyColor = '#1a0b2e';       // 3구간: 마왕성 짙은 보라
+    skyColor = '#1a0b2e';
     groundColor = '#581c87';
   } else if (curDist >= 600) {
-    skyColor = '#2d150b';       // 2구간: 황무지 노을/붉은색
+    skyColor = '#2d150b';
     groundColor = '#b45309';
   }
 
   ctx.fillStyle = skyColor;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  // 거리 표시선
   ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
   for (let m = 0; m <= STAGE_LENGTH; m += 50) {
     let scrX = (m * SCALE_X) - cameraX;
@@ -1085,7 +1089,6 @@ function render() {
   bossBombs.forEach(b => {
     let bx = b.x - cameraX;
     if (b.state === 'warning') {
-      // 0.6초간 깜빡이는 붉은 경고 원 (지름 64px)
       ctx.save();
       ctx.strokeStyle = Math.floor(Date.now() / 100) % 2 === 0 ? '#ff0055' : '#ffffff';
       ctx.lineWidth = 3;
@@ -1096,22 +1099,19 @@ function render() {
       ctx.fill();
       ctx.restore();
     } else if (b.state === 'exploding') {
-      // 900ms 12프레임 폭탄 폭발 GIF 렌더링 + 발광 이펙트
       ctx.save();
-      
-      // 폭발 중심 발광 효과 (GIF가 없거나 로딩 중이어도 시각 효과 유지)
       let glowColor = b.assetKey === 'effect_fireball' ? 'rgba(255, 68, 0, 0.4)' : 'rgba(168, 85, 247, 0.4)';
       ctx.fillStyle = glowColor;
       ctx.beginPath();
       ctx.arc(bx + 32, b.y + 32, 34, 0, Math.PI * 2);
       ctx.fill();
 
-      // 전용 GIF 인스턴스 렌더링 (없으면 기존 캐시 이미지, 둘 다 없으면 이모지)
-      if (b.imgInstance && b.imgInstance.complete && b.imgInstance.naturalWidth > 0) {
-        ctx.drawImage(b.imgInstance, bx, b.y, b.width, b.height);
-      } else if (ASSETS.images[b.assetKey]) {
-        ctx.drawImage(ASSETS.images[b.assetKey], bx, b.y, b.width, b.height);
-      } else {
+      // 폭탄 네이티브 실시간 GIF DOM 동기화
+      let bombSrc = b.assetKey === 'effect_fireball' ? 'assets/effects/fire_ball.gif' : 'assets/effects/dark_orb.gif';
+      syncEntityDOM('bomb_' + b.id, bombSrc, bx, b.y, b.width, b.height, 1, false, true);
+
+      // 이미지 부재 시 캔버스 이모티콘 Fallback
+      if (!ASSETS.images[b.assetKey]) {
         ctx.font = '40px "NeoDunggeunGothicPro", sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
@@ -1121,21 +1121,24 @@ function render() {
     }
   });
 
-  // 3. 몬스터 렌더링 & [머리 위 숫자 체력 표기]
+  // 3. 몬스터 렌더링 & [실시간 움직이는 GIF DOM 동기화]
   monsters.forEach(m => {
     let sx = m.x - cameraX;
-    ctx.save();
-    if (m.hitFlash > 0) ctx.filter = 'brightness(3)';
+    let isVisible = (sx >= -80 && sx <= 950);
 
-    if (ASSETS.images[m.assetKey]) {
-      ctx.drawImage(ASSETS.images[m.assetKey], sx, m.y, m.width, m.height);
-    } else {
+    // 네이티브 GIF DOM 엔진 동기화 (움직임 보장)
+    syncEntityDOM('mob_' + m.id, `assets/monsters/${m.type}.gif`, sx, m.y, m.width, m.height, -1, m.hitFlash > 0, isVisible);
+
+    // 이미지 부재 시 캔버스 백업 이모티콘
+    if (!ASSETS.images[m.assetKey]) {
+      ctx.save();
+      if (m.hitFlash > 0) ctx.filter = 'brightness(3)';
       ctx.font = '44px "NeoDunggeunGothicPro", sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'bottom';
       ctx.fillText(m.emoji, sx + m.width / 2, m.y + m.height + 4);
+      ctx.restore();
     }
-    ctx.restore();
 
     // 머리 위 정수 숫자 체력 표기
     ctx.font = '14px "NeoDunggeunGothicPro"';
@@ -1144,22 +1147,24 @@ function render() {
     ctx.fillText(`HP ${m.hp}`, sx + m.width / 2, m.y - 8);
   });
 
-  // 4. 보스 렌더링
+  // 4. 보스 렌더링 & [실시간 대형 GIF DOM 동기화]
   [bosses.dragon, bosses.demon].forEach(b => {
     if (b && b.active) {
       let bx = b.x - cameraX;
-      ctx.save();
-      if (b.hitFlash > 0) ctx.filter = 'brightness(3)';
 
-      if (ASSETS.images[b.assetKey]) {
-        ctx.drawImage(ASSETS.images[b.assetKey], bx, b.y, b.width, b.height);
-      } else {
+      // 보스 96x96 네이티브 GIF DOM 동기화
+      syncEntityDOM('boss_' + b.type, `assets/monsters/${b.type === 'dragon' ? 'dragon' : 'demon'}.gif`, bx, b.y, b.width, b.height, -1, b.hitFlash > 0, true);
+
+      // 이미지 부재 시 백업 이모티콘
+      if (!ASSETS.images[b.assetKey]) {
+        ctx.save();
+        if (b.hitFlash > 0) ctx.filter = 'brightness(3)';
         ctx.font = '76px "NeoDunggeunGothicPro", sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'bottom';
         ctx.fillText(b.emoji, bx + b.width / 2, b.y + b.height);
+        ctx.restore();
       }
-      ctx.restore();
 
       // 상단 대형 보스 체력바
       ctx.fillStyle = '#000';
@@ -1206,12 +1211,12 @@ function render() {
     }
   });
 
-  // 6. 플레이어 렌더링 (보호막 버블 포함)
+  // 6. 플레이어 렌더링 & [실시간 네이티브 GIF 동기화]
   if (player && (player.invincibleTimer <= 0 || Math.floor(Date.now() / 80) % 2 === 0)) {
     let px = player.x - cameraX;
     ctx.save();
 
-    // 보호막 구체 버블 연출
+    // 보호막 버블
     if (player.shield > 0) {
       ctx.strokeStyle = '#38bdf8';
       ctx.lineWidth = 3;
@@ -1222,12 +1227,12 @@ function render() {
       ctx.fill();
     }
 
-    let heroKey = 'hero_' + selectedChar;
-    if (ASSETS.images[heroKey]) {
-      ctx.translate(px + player.width / 2, player.y + player.height / 2);
-      if (player.facing === -1) ctx.scale(-1, 1);
-      ctx.drawImage(ASSETS.images[heroKey], -player.width/2, -player.height/2, player.width, player.height);
-    } else {
+    // 플레이어 64x64 실시간 네이티브 GIF DOM 동기화
+    let isBlink = player.invincibleTimer > 0 && Math.floor(Date.now() / 80) % 2 === 0;
+    syncEntityDOM('player_sprite', `assets/heroes/${selectedChar}.gif`, px, player.y, player.width, player.height, player.facing, false, !isBlink);
+
+    // 이미지 부재 시 대체 이모티콘
+    if (!ASSETS.images['hero_' + selectedChar]) {
       let heroEmoji = selectedChar === 'warrior' ? '🥷' : (selectedChar === 'mage' ? '🧙' : '🧝');
       ctx.font = '48px "NeoDunggeunGothicPro", sans-serif';
       ctx.textAlign = 'center';
@@ -1309,7 +1314,6 @@ function render() {
 
   // 9. 상단 통합 HUD
   if (gameState === 'PLAYING' || gameState === 'UPGRADE' || gameState === 'READY') {
-    // 1열: 하트 (❤️ / 🤍) 및 보호막 (🛡️)
     let heartStr = '';
     for (let i = 0; i < player.maxHearts; i++) {
       heartStr += i < player.hearts ? '❤️' : '🤍';
@@ -1320,23 +1324,19 @@ function render() {
     ctx.textAlign = 'left';
     ctx.fillText(heartStr, 20, 30);
 
-    // 속도 (m/s)
     let speedMps = (player.speed * 3.0).toFixed(1);
     ctx.fillStyle = '#00e5ff';
     ctx.fillText(`속도: ${speedMps} m/s`, 220, 30);
 
-    // 점수 (6자리 포맷)
     let paddedScore = String(score).padStart(6, '0');
     ctx.fillStyle = '#ffcc00';
     ctx.fillText(`점수: ${paddedScore} P`, 380, 30);
 
-    // 제한 시간
     let timerColor = timeLeft <= 30 ? '#ef4444' : '#ffffff';
     ctx.fillStyle = timerColor;
     ctx.textAlign = 'right';
     ctx.fillText(`⏳ ${Math.ceil(timeLeft)}초`, canvas.width - 20, 30);
 
-    // 2열: 획득 버프 인벤토리 트레이
     let buffStr = '';
     for (let icon in player.buffCounts) {
       buffStr += `[${icon} × ${player.buffCounts[icon]}] `;
@@ -1348,7 +1348,6 @@ function render() {
       ctx.fillText(buffStr, 20, 56);
     }
 
-    // 스킬 쿨타임
     ctx.font = '14px "NeoDunggeunGothicPro"';
     ctx.textAlign = 'right';
     if (player.skillTimer > 0) {
@@ -1378,16 +1377,65 @@ function render() {
   ctx.restore();
 }
 
-// --- 13. 점프 및 키보드/터치 입력 바인딩 ---
+// --- 13. GIF 네이티브 실시간 애니메이션 DOM 동기화 엔진 ---
+function getEntityLayer() {
+  let layer = document.getElementById('entity-layer');
+  if (!layer) {
+    layer = document.createElement('div');
+    layer.id = 'entity-layer';
+    layer.style.cssText = 'position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; overflow:hidden; z-index:5;';
+    const container = document.getElementById('game-container');
+    if (container) container.appendChild(layer);
+  }
+  return layer;
+}
+
+function syncEntityDOM(id, src, x, y, w, h, facing = 1, flash = false, visible = true) {
+  const layer = getEntityLayer();
+  if (!layer) return;
+
+  let el = document.getElementById(id);
+  if (!visible) {
+    if (el) el.style.display = 'none';
+    return;
+  }
+
+  if (!el) {
+    el = document.createElement('img');
+    el.id = id;
+    el.src = src;
+    el.style.cssText = 'position:absolute; image-rendering:pixelated; image-rendering:crisp-edges; transform-origin:center center; will-change:transform,left,top;';
+    el.onerror = () => { el.style.display = 'none'; };
+    layer.appendChild(el);
+  }
+
+  el.style.display = 'block';
+  el.style.left = (x / 900 * 100) + '%';
+  el.style.top = (y / 500 * 100) + '%';
+  el.style.width = (w / 900 * 100) + '%';
+  el.style.height = (h / 500 * 100) + '%';
+  el.style.transform = facing === -1 ? 'scaleX(-1)' : 'scaleX(1)';
+  el.style.filter = flash ? 'brightness(3)' : 'none';
+}
+
+function removeEntityDOM(id) {
+  const el = document.getElementById(id);
+  if (el) el.remove();
+}
+
+function clearAllEntityDOM() {
+  const layer = document.getElementById('entity-layer');
+  if (layer) layer.innerHTML = '';
+}
+
+// --- 14. 점프 및 키보드/터치 입력 바인딩 ---
 function triggerJump() {
   if (!player) return;
   if (keys.down) {
-    // 2층에서 하향 점프
     player.ignorePlatformTimer = 0.4;
     player.vy = 6;
     player.isGrounded = false;
   } else if (player.isGrounded) {
-    // 1층 -> 2층으로 넉넉히 도약하는 점프력 (관성 유지)
     player.vy = -15.5;
     player.isGrounded = false;
   }
@@ -1402,7 +1450,6 @@ window.addEventListener('keydown', e => {
   if (e.code === 'ArrowRight') keys.right = true;
   if (e.code === 'ArrowDown') {
     keys.down = true;
-    // 2층 발판에 있을 때만 하향 점프 발동 (1층에선 무시)
     if (player && player.isGrounded && player.y < FLOOR_2_Y) {
       triggerJump();
     }
@@ -1419,7 +1466,7 @@ window.addEventListener('keyup', e => {
   if (e.code === 'ArrowDown') keys.down = false;
 });
 
-// 모바일 D-Pad 및 액션 버튼 이벤트 바인딩
+// 모바일 가상 D-Pad 및 액션 버튼 이벤트 바인딩
 function setupTouch(id, pressFn, releaseFn) {
   const el = document.getElementById(id);
   if (!el) return;
